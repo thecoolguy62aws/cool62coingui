@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/global.css">
+    <title>cool62coin Wallet - Node Settings</title>
+</head>
+<body>
+    <aside class="sidebar">
+        <h2>cool62coin Wallet</h2>
+        <nav>
+            <a href="/">Accounts</a>
+            <a href="/receive">Receive</a>
+            <a href="/send">Send</a>
+            <a href="/transfer">Move Funds</a>
+            <a href="/history">History</a>
+            <a class="sidebar-active" href="/node">Node</a>
+        </nav>
+    </aside>
+    <main>
+        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+                <div style="display: flex; gap: 10px;">
+                    <button class="header-refresh-btn" onclick="window.location.reload();">Reload</button>
+                </div>
+                <span class="reload-notice-text">
+                    Balances incorrect? Try reloading. Local nodes may take a long time to sync.
+                </span>
+        </div>
+
+        <p class="text" style="margin-top: 2rem;">Select your network connection type:</p>
+        
+        <div id="node-selector-group" style="max-width: 600px; display: flex; flex-direction: column; gap: 14px;">
+            
+            <div class="account-card node-config-card" id="card-remote" data-type="remote">
+                <p style="font-weight: 600; font-size: 1.05rem;">Official Remote Node</p>
+                <p style="font-size: 0.85rem; margin-top: 4px; opacity: 0.8;">Connect to the official remote node. This is slightly less private, but is easier on your computer.</p>
+                <p class="monospace" style="margin-top: 8px; font-size: 0.85rem; font-weight: 500;">Endpoint: https://coinnode.cool62.net</p>
+            </div>
+
+            <div class="account-card node-config-card" id="card-local" data-type="local">
+                <p style="font-weight: 600; font-size: 1.05rem;">Run Background Local Node</p>
+                <p style="font-size: 0.85rem; margin-top: 4px; opacity: 0.8;">Runs a node on your computer. This is a bit harder on your computer but a lot more private. It might take a while to download the blockchain and update your balances.</p>
+                <!--<p class="monospace" style="margin-top: 8px; font-size: 0.85rem; font-weight: 500;">Endpoint: http://127.0.0.1:8090</p>--> 
+                <!--I considered including this, but I decided that the user doesn't care what port the node is running on if it works.-->
+            </div>
+
+            <div class="account-card node-config-card" id="card-custom" data-type="custom">
+                <p style="font-weight: 600; font-size: 1.05rem;">Custom Remote Node</p>
+                <p style="font-size: 0.85rem; margin-top: 4px; opacity: 0.8;">Use an unofficial remote node. This can harm your privacy, but is easier on your computer.</p>
+                
+                <div id="custom-input-wrapper" style="margin-top: 12px; display: none;" onclick="event.stopPropagation();">
+                    <input type="text" id="custom-node-url-input" class="address-textbox" style="font-family: monospace;" placeholder="http://127.0.0.1:8090">
+                </div>
+            </div>
+        </div>
+
+        <p id="settings-status-msg" class="status-msg" style="max-width: 600px;"></p>
+
+        <button type="button" id="save-node-settings-btn" class="send-submit-button" style="max-width: 600px; margin-top: 2rem;" disabled>
+            Select Connection Profile
+        </button>
+    </main>
+
+    <script>
+        let selectedNodeType = "";
+        const currentActiveEndpoint = "{{ current_node }}";
+
+        window.addEventListener("pywebviewready", function() {
+            const configCards = document.querySelectorAll(".node-config-card");
+            const saveBtn = document.getElementById("save-node-settings-btn");
+            const customWrapper = document.getElementById("custom-input-wrapper");
+            const customUrlInput = document.getElementById("custom-node-url-input");
+            const statusNotice = document.getElementById("settings-status-msg");
+
+            if (currentActiveEndpoint === "https://coinnode.cool62.net") {
+                selectedNodeType = "remote";
+                document.getElementById("card-remote").classList.add("selected");
+            } else if (currentActiveEndpoint === "http://127.0.0.1:8090") {
+                selectedNodeType = "local";
+                document.getElementById("card-local").classList.add("selected");
+            } else {
+                selectedNodeType = "custom";
+                document.getElementById("card-custom").classList.add("selected");
+                customWrapper.style.display = "block";
+                customUrlInput.value = currentActiveEndpoint;
+            }
+
+            configCards.forEach(function(card) {
+                card.addEventListener("click", function() {
+                    configCards.forEach(function(c) { c.classList.remove("selected"); });
+                    card.classList.add("selected");
+
+                    selectedNodeType = card.getAttribute("data-type");
+                    statusNotice.style.display = "none";
+                    saveBtn.disabled = false;
+                    saveBtn.innerText = "Apply Connection Changes";
+
+                    if (selectedNodeType === "custom") {
+                        customWrapper.style.display = "block";
+                        customUrlInput.focus();
+                    } else {
+                        customWrapper.style.display = "none";
+                    }
+                });
+            });
+
+            saveBtn.addEventListener("click", function() {
+                const targetCustomUrl = customUrlInput.value.trim();
+                
+                if (selectedNodeType === "custom" && !targetCustomUrl) {
+                    alert("Please specify a valid custom node server target location address URL string.");
+                    return;
+                }
+
+                saveBtn.disabled = true;
+                saveBtn.innerText = "Applying changes...";
+
+                pywebview.api.switch_node(selectedNodeType, targetCustomUrl)
+                    .then(function(res) {
+                        statusNotice.setAttribute("class", "status-msg status-success");
+                        statusNotice.innerText = "Success! Node changed to " + res.active_node + ".";
+                        statusNotice.style.display = "block";
+                        saveBtn.innerText = "Applied Successfully";
+                    })
+                    .catch(function(err) {
+                        statusNotice.setAttribute("class", "status-msg status-error");
+                        statusNotice.innerText = "Failed saving configuration settings metrics: " + err;
+                        statusNotice.style.display = "block";
+                        saveBtn.disabled = false;
+                        saveBtn.innerText = "Apply Connection Changes";
+                    });
+            });
+        });
+    </script>
+</body>
+</html>

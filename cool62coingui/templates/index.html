@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/global.css">
+    <title>cool62coin Wallet</title>
+</head>
+<body>
+    <aside class="sidebar">
+        <h2>cool62coin Wallet</h2>
+        <nav>
+            <a class="sidebar-active" href="/">Accounts</a>
+            <a href="/receive">Receive</a>
+            <a href="/send">Send</a>
+            <a href="/transfer">Move Funds</a>
+            <a href="/history">History</a>
+            <a href="/node">Node</a>
+        </nav>
+    </aside>
+    <main>
+        <div class="header-container">
+            <h3 class="page-title">Your Accounts</h3>
+            
+            <div style="display: flex; gap: 10px; align-items: flex-start;">
+                
+                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
+                    <button class="header-refresh-btn" onclick="window.location.reload();">Reload</button>
+                    <span class="reload-notice-text" style="text-align: right; max-width: 250px;">
+                        Balances incorrect? Try reloading. Local nodes may take a long time to sync.
+                    </span>
+                </div>
+                
+                <button id="open-create-modal-btn" class="copy-button" type="button" style="padding: 6px 14px; font-size: 0.9rem;">+ New Account</button>
+            </div>
+        </div>
+        
+        <div id="accounts-list-container" style="margin-top: 2rem;">
+            {% if (addresses | length) == 0 %}
+                <div class="welcome-onboard-card" id="welcome-onboard-card">
+                    <h2 style="color: #111827; font-size: 1.5rem; margin-bottom: 10px;">Welcome to cool62coin Wallet!</h2>
+                    <p class="text" style="color: #4b5563; max-width: 500px; margin: 0 auto 24px auto; font-size: 0.95rem; line-height: 1.5;">
+                        It looks like you don't have any accounts set up yet. Let's get an account set up so that you can start transacting on the network.
+                    </p>
+                    <button id="onboard-start-btn" class="send-submit-button" type="button" style="max-width: 260px; margin: 0 auto;">
+                        Get Started & Add Account
+                    </button>
+                </div>
+            {% else %}
+                {% for i in range(addresses | length) %}
+                    <div class="account-card dashboard-row" data-index="{{ i }}" data-address="{{ addresses[i] }}" style="cursor: default !important;">
+                        <div class="card-left-info">
+                            <p class="account-name" style="font-weight: 600;">{{ accounts[i] }}</p>
+                            <p class="address">{{ addresses[i] }}</p>
+                            <p id="balance-{{ i }}">Checking balance...</p>
+                        </div>
+                        <div class="card-right-actions">
+                            <button class="action-rename-btn" id="rename-btn-{{ i }}" title="Rename Account">✎</button>
+                            <button class="action-delete-btn" id="delete-btn-{{ i }}" style="display: none;" title="Delete Empty Account">✕</button>
+                            <button class="action-arrow-btn sort-up-btn" title="Move Up">▲</button>
+                            <button class="action-arrow-btn sort-down-btn" title="Move Down">▼</button>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <div id="rename-modal" class="modal-overlay">
+            <div class="modal-content" style="max-width: 400px;">
+                <h3>Rename Account</h3>
+                <p class="text" style="font-size: 0.9rem; color: #4b5563; margin-top: 4px;">Update the description for this account below.</p>
+                
+                <div class="form-group" style="margin-top: 1rem;">
+                    <label for="edit-account-name" class="form-label">New Account Name:</label>
+                    <input type="text" id="edit-account-name" class="address-textbox" placeholder="e.g., Payment Account" autocomplete="off" maxlength="32">
+                </div>
+
+                <div class="modal-actions" style="margin-top: 1.5rem;">
+                    <button type="button" id="rename-cancel-btn" class="modal-btn cancel-btn">Cancel</button>
+                    <button type="button" id="rename-confirm-btn" class="modal-btn confirm-action-btn" style="background-color: #111827; border-color: #111827;">Save Name</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="total-balance-wrapper" style="margin-top: 2rem;">
+            <h3 id="total-balance" class="total-balance"><span>Total Balance: </span>Calculating...</h3>
+        </div>
+    </main>
+
+    <div id="choice-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 400px; text-align: center;">
+            <h3>Add Account</h3>
+            <p class="text" style="font-size: 0.9rem; color: #4b5563; margin-top: 6px;">Choose how you want to add an account to cool62coin Wallet.</p>
+            
+            <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 1.5rem;">
+                <button type="button" id="choice-create-btn" class="send-submit-button" style="margin-top:0;">Create New Account</button>
+                <button type="button" id="choice-import-btn" class="copy-button" style="width:100%; padding:12px;">Import From Seed Phrase</button>
+            </div>
+            <div class="modal-actions" style="margin-top: 1.5rem; justify-content: center;">
+                <button type="button" id="choice-cancel-btn" class="modal-btn cancel-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="create-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 400px;">
+            <h3>Create New Account</h3>
+            <div class="form-group" style="margin-top: 1rem;">
+                <label for="new-account-name" class="form-label">Account Name Label:</label>
+                <input type="text" id="new-account-name" class="address-textbox" placeholder="e.g., Savings Account" autocomplete="off" maxlength="32">
+            </div>
+            <div class="modal-actions" style="margin-top: 1.5rem;">
+                <button type="button" id="create-cancel-btn" class="modal-btn cancel-btn">Back</button>
+                <button type="button" id="create-confirm-btn" class="modal-btn confirm-action-btn" style="background-color: #111827; border-color: #111827;">Generate Keypair</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="reveal-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 480px;">
+            <h3>Secret Recovery Phrase</h3>
+            <p class="modal-warning-text" style="margin-top: 4px;">Write down these 24 words in order and save them securely. It will never be shown again.</p>
+            
+            <div id="seed-phrase-display-grid" style="background-color: #f9fafb; border: 2px solid #d1d5db; padding: 16px; border-radius: 6px; font-family: monospace; font-size: 0.95rem; line-height: 1.6; margin-top: 1rem; word-spacing: 8px; text-align: center;">
+            </div>
+            
+            <div class="modal-actions" style="margin-top: 1.5rem; justify-content: center;">
+                <button type="button" id="reveal-continue-btn" class="modal-btn confirm-action-btn" style="background-color: #111827; border-color: #111827;">I Have Written It Down</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="quiz-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 400px;">
+            <h3>Security Verification Check</h3>
+            <p class="text" style="font-size: 0.9rem; color: #4b5563; margin-top: 4px;">To ensure your account backup is safe, please verify you have your phrase written down correctly.</p>
+            
+            <p style="font-weight: 600; margin-top: 1.25rem; font-size: 1.05rem;" id="quiz-question-text">What is Word #?</p>
+            
+            <div id="quiz-options-group" style="display: flex; flex-direction: column; gap: 10px; margin-top: 1rem;"></div>
+
+            <p id="quiz-error-msg" style="color: #dc2626; font-size: 0.85rem; margin-top: 1rem; font-weight: 500; display: none;">Incorrect word selected. Review your saved phrase and try again.</p>
+
+            <div class="modal-actions" style="margin-top: 1.5rem;">
+                <button type="button" id="quiz-cancel-btn" class="modal-btn cancel-btn">Cancel Setup</button>
+                <button type="button" id="quiz-submit-btn" class="modal-btn confirm-action-btn" style="background-color: #111827; border-color: #111827;" disabled>Verify & Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="import-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 480px;">
+            <h3>Import Account From Seed</h3>
+            <div class="form-group" style="margin-top: 1rem;">
+                <label for="import-account-name" class="form-label">Account Name Label:</label>
+                <input type="text" id="import-account-name" class="address-textbox" placeholder="e.g., Recovered Account" autocomplete="off" maxlength="32">
+            </div>
+            <div class="form-group" style="margin-top: 1.25rem;">
+                <label for="import-seed-input" class="form-label">24-Word Seed Phrase:</label>
+                <textarea id="import-seed-input" class="address-textbox" style="flex: none !important; height: 112px !important; resize: none; font-family: monospace; font-size: 0.9rem; line-height: 1.4;" placeholder="Enter your 24 words separated by spaces..."></textarea>
+            </div>
+            <div class="modal-actions" style="margin-top: 1.5rem;">
+                <button type="button" id="import-cancel-btn" class="modal-btn cancel-btn">Back</button>
+                <button type="button" id="import-confirm-btn" class="modal-btn confirm-action-btn" style="background-color: #111827; border-color: #111827;">Import Account</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="delete-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 400px;">
+            <h3 style="color: #dc2626;">Delete Empty Account</h3>
+            <p class="modal-warning-text" style="margin-top: 6px;">Are you certain you want to destroy this account forever?</p>
+            
+            <div class="modal-tx-summary" style="margin-top: 1rem; background-color: #fef2f2; border: 1px solid #fee2e2;">
+                <p><strong>Account Name:</strong> <span id="delete-modal-name">-</span></p>
+                <p style="font-size: 0.85rem; word-break: break-all; margin-top: 0.25rem;"><strong>Address:</strong> <span id="delete-modal-address">-</span></p>
+            </div>
+            
+            <p style="font-size: 0.85rem; color: #6b7280; font-style: italic; margin-top: 1rem;">This operation permanently deletes the keys for this account. This action cannot be reversed.</p>
+
+            <div class="modal-actions" style="margin-top: 1.5rem;">
+                <button type="button" id="delete-cancel-btn" class="modal-btn cancel-btn">Cancel</button>
+                <button type="button" id="delete-confirm-btn" class="modal-btn confirm-action-btn" style="background-color: #dc2626; border-color: #dc2626;">Delete Account</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let totalBalance = 0;
+        let completedRequests = 0;
+        const balances = {};
+        let activeDeleteIndex = null; 
+        let activeRenameIndex = null; 
+
+        let generatedPhraseArray = [];
+        let correctWordIndex = -1;
+        let selectedQuizWord = "";
+
+        window.addEventListener("pywebviewready", function() {
+            const listContainer = document.getElementById("accounts-list-container");
+            const cards = document.querySelectorAll(".account-card:not(#welcome-onboard-card)");
+            
+            const choiceModal = document.getElementById("choice-modal");
+            const createModal = document.getElementById("create-modal");
+            const revealModal = document.getElementById("reveal-modal");
+            const quizModal = document.getElementById("quiz-modal");
+            const importModal = document.getElementById("import-modal");
+            const deleteModal = document.getElementById("delete-modal");
+            const renameModal = document.getElementById("rename-modal");
+
+            const openChoiceBtn = document.getElementById("open-create-modal-btn");
+            const onboardStartBtn = document.getElementById("onboard-start-btn");
+            
+            const choiceCancel = document.getElementById("choice-cancel-btn");
+            const choiceCreate = document.getElementById("choice-create-btn");
+            const choiceImport = document.getElementById("choice-import-btn");
+
+            const createCancel = document.getElementById("create-cancel-btn");
+            const createConfirm = document.getElementById("create-confirm-btn");
+            const importCancel = document.getElementById("import-cancel-btn");
+            const importConfirm = document.getElementById("import-confirm-btn");
+            const revealContinueBtn = document.getElementById("reveal-continue-btn");
+            
+            const quizCancelBtn = document.getElementById("quiz-cancel-btn");
+            const quizSubmitBtn = document.getElementById("quiz-submit-btn");
+            const deleteCancelBtn = document.getElementById("delete-cancel-btn");
+            const deleteConfirmBtn = document.getElementById("delete-confirm-btn");
+            const renameCancelBtn = document.getElementById("rename-cancel-btn");
+            const renameConfirmBtn = document.getElementById("rename-confirm-btn");
+
+            const deleteModalName = document.getElementById("delete-modal-name");
+            const deleteModalAddress = document.getElementById("delete-modal-address");
+            const editAccountNameInput = document.getElementById("edit-account-name");
+            const newAccountNameInput = document.getElementById("new-account-name");
+            const importAccountNameInput = document.getElementById("import-account-name");
+            const importSeedInput = document.getElementById("import-seed-input");
+
+            if (cards.length === 0) {
+                document.getElementById("total-balance").innerHTML = '<span>Total Balance: </span>0 C62';
+            }
+
+            if (openChoiceBtn) {
+                openChoiceBtn.addEventListener("click", function() { choiceModal.classList.add("active"); });
+            }
+            if (onboardStartBtn) {
+                onboardStartBtn.addEventListener("click", function() { choiceModal.classList.add("active"); });
+            }
+            
+            choiceCancel.addEventListener("click", function() { choiceModal.classList.remove("active"); });
+
+            choiceCreate.addEventListener("click", function() {
+                choiceModal.classList.remove("active");
+                newAccountNameInput.value = "";
+                createModal.classList.add("active");
+            });
+            createCancel.addEventListener("click", function() {
+                createModal.classList.remove("active");
+                choiceModal.classList.add("active");
+            });
+
+            choiceImport.addEventListener("click", function() {
+                choiceModal.classList.remove("active");
+                importAccountNameInput.value = "";
+                importSeedInput.value = "";
+                importModal.classList.add("active");
+            });
+            importCancel.addEventListener("click", function() {
+                importModal.classList.remove("active");
+                choiceModal.classList.add("active");
+            });
+
+            createConfirm.addEventListener("click", function() {
+                const labelName = newAccountNameInput.value.trim();
+                createConfirm.disabled = true;
+                createConfirm.innerText = "Generating...";
+
+                pywebview.api.create_account(labelName)
+                    .then(function(res) {
+                        createModal.classList.remove("active");
+                        
+                        generatedPhraseArray = res.seed_phrase.split(" ");
+                        document.getElementById("seed-phrase-display-grid").innerText = res.seed_phrase;
+                        
+                        createConfirm.disabled = false;
+                        createConfirm.innerText = "Generate Keypair";
+                        revealModal.classList.add("active");
+                    })
+                    .catch(function(err) {
+                        alert("Error: " + err);
+                        createConfirm.disabled = false;
+                        createConfirm.innerText = "Generate Keypair";
+                    });
+            });
+
+            revealContinueBtn.addEventListener("click", function() {
+                revealModal.classList.remove("active");
+                
+                correctWordIndex = Math.floor(Math.random() * 24);
+                const correctWord = generatedPhraseArray[correctWordIndex];
+                
+                document.getElementById("quiz-question-text").innerText = "Confirm word position #" + (correctWordIndex + 1) + ":";
+                
+                const decoys = ["abandon", "ability", "able", "about", "above", "absent", "absorb", "abstract", "absurd", "abuse", "access", "accident", "account", "accuse", "achieve", "acid", "acoustic", "acquire", "across", "act", "action", "actor", "actress", "actual", "adapt", "add", "addict", "address", "adjust", "admit", "adult", "advance", "advice", "aerobic", "affair", "afford", "afraid", "again", "age", "agent", "agree", "ahead", "aim", "air", "airport", "aisle", "alarm", "album", "alcohol", "alert", "alien", "all", "alley", "allow", "almost", "alone", "alpha", "already", "also", "alter", "always", "amateur", "amazing", "among", "amount", "amused", "analyst", "anchor", "ancient", "anger", "angle", "angry", "animal", "ankle", "announce", "annual", "another", "answer", "antenna", "antique", "anxiety", "any", "apart", "apology", "appear", "apple", "approve", "april", "arch", "arctic", "area", "arena", "argue", "arm", "armed", "armor", "army", "around", "arrange", "arrest", "arrive", "arrow", "art", "artefact", "artist", "artwork", "ask", "aspect", "assault", "asset", "assist", "assume", "asthma", "athlete", "atom", "attack", "attend", "attitude", "attract", "auction", "audit", "august", "aunt", "author", "auto", "autumn", "average", "avocado", "avoid", "awake", "aware", "away", "awesome", "awful", "awkward", "axis", "baby", "bachelor", "bacon", "badge", "bag", "balance", "balcony", "ball", "bamboo", "banana", "banner", "bar", "barely", "bargain", "barrel", "base", "basic", "basket", "battle", "beach", "bean", "beauty", "because", "become", "beef", "before", "begin", "behave", "behind", "believe", "below", "belt", "bench", "benefit", "best", "betray", "better", "between", "beyond", "bicycle", "bid", "bike", "bind", "biology", "bird", "birth", "bitter", "black", "blade", "blame", "blanket", "blast", "bleak", "bless", "blind", "blood", "blossom", "blouse", "blue", "blur", "blush", "board", "boat", "body", "boil", "bomb", "bone", "bonus", "book", "boost", "border", "boring", "borrow", "boss", "bottom", "bounce", "box", "boy", "bracket", "brain", "brand", "brass", "brave", "bread", "breeze", "brick", "bridge", "brief", "bright", "bring", "brisk", "broccoli", "broken", "bronze", "broom", "brother", "brown", "brush", "bubble", "buddy", "budget", "buffalo", "build", "bulb", "bulk", "bullet", "bundle", "bunker", "burden", "burger", "burst", "bus", "business", "busy", "butter", "buyer", "buzz", "cabbage", "cabin", "cable", "cactus", "cage", "cake", "call", "calm", "camera", "camp", "can", "canal", "cancel", "candy", "cannon", "canoe", "canvas", "canyon", "capable", "capital", "captain", "car", "carbon", "card", "cargo", "carpet", "carry", "cart", "case", "cash", "casino", "castle", "casual", "cat", "catalog", "catch", "category", "cattle", "caught", "cause", "caution", "cave", "ceiling", "celery", "cement", "census", "century", "cereal", "certain", "chair", "chalk", "champion", "change", "chaos", "chapter", "charge", "chase", "chat", "cheap", "check", "cheese", "chef", "cherry", "chest", "chicken", "chief", "child", "chimney", "choice", "choose", "chronic", "chuckle", "chunk", "churn", "cigar", "cinnamon", "circle", "citizen", "city", "civil", "claim", "clap", "clarify", "claw", "clay", "clean", "clerk", "clever", "click", "client", "cliff", "climb", "clinic", "clip", "clock", "clog", "close", "cloth", "cloud", "clown", "club", "clump", "cluster", "clutch", "coach", "coast", "coconut", "code", "coffee", "coil", "coin", "collect", "color", "column", "combine", "come", "comfort", "comic", "common", "company", "concert", "conduct", "confirm", "congress", "connect", "consider", "control", "convince", "cook", "cool", "copper", "copy", "coral", "core", "corn", "correct", "cost", "cotton", "couch", "country", "couple", "course", "cousin", "cover", "coyote", "crack", "cradle", "craft", "cram", "crane", "crash", "crater", "crawl", "crazy", "cream", "credit", "creek", "crew", "cricket", "crime", "crisp", "critic", "crop", "cross", "crouch", "crowd", "crucial", "cruel", "cruise", "crumble", "crunch", "crush", "cry", "crystal", "cube", "culture", "cup", "cupboard", "curious", "current", "curtain", "curve", "cushion", "custom", "cute", "cycle", "dad", "damage", "damp", "dance", "danger", "daring", "dash", "daughter", "dawn", "day", "deal", "debate", "debris", "decade", "december", "decide", "decline", "decorate", "decrease", "deer", "defense", "define", "defy", "degree", "delay", "deliver", "demand", "demise", "denial", "dentist", "deny", "depart", "depend", "deposit", "depth", "deputy", "derive", "describe", "desert", "design", "desk", "despair", "destroy", "detail", "detect", "develop", "device", "devote", "diagram", "dial", "diamond", "diary", "dice", "diesel", "diet", "differ", "digital", "dignity", "dilemma", "dinner", "dinosaur", "direct", "dirt", "disagree", "discover", "disease", "dish", "dismiss", "disorder", "display", "distance", "divert", "divide", "divorce", "dizzy", "doctor", "document", "dog", "doll", "dolphin", "domain", "donate", "donkey", "donor", "door", "dose", "double", "dove", "draft", "dragon", "drama", "drastic", "draw", "dream", "dress", "drift", "drill", "drink", "drip", "drive", "drop", "drum", "dry", "duck", "dumb", "dune", "during", "dust", "dutch", "duty", "dwarf", "dynamic", "eager", "eagle", "early", "earn", "earth", "easily", "east", "easy", "echo", "ecology", "economy", "edge", "edit", "educate", "effort", "egg", "eight", "either", "elbow", "elder", "electric", "elegant", "element", "elephant", "elevator", "elite", "else", "embark", "embody", "embrace", "emerge", "emotion", "employ", "empower", "empty", "enable", "enact", "end", "endless", "endorse", "enemy", "energy", "enforce", "engage", "engine", "enhance", "enjoy", "enlist", "enough", "enrich", "enroll", "ensure", "enter", "entire", "entry", "envelope", "episode", "equal", "equip", "era", "erase", "erode", "erosion", "error", "erupt", "escape", "essay", "essence", "estate", "eternal", "ethics", "evidence", "evil", "evoke", "evolve", "exact", "example", "excess", "exchange", "excite", "exclude", "excuse", "execute", "exercise", "exhaust", "exhibit", "exile", "exist", "exit", "exotic", "expand", "expect", "expire", "explain", "expose", "express", "extend", "extra", "eye", "eyebrow", "fabric", "face", "faculty", "fade", "faint", "faith", "fall", "false", "fame", "family", "famous", "fan", "fancy", "fantasy", "farm", "fashion", "fat", "fatal", "father", "fatigue", "fault", "favorite", "feature", "february", "federal", "fee", "feed", "feel", "female", "fence", "festival", "fetch", "fever", "few", "fiber", "fiction", "field", "figure", "file", "film", "filter", "final", "find", "fine", "finger", "finish", "fire", "firm", "first", "fiscal", "fish", "fit", "fitness", "fix", "flag", "flame", "flash", "flat", "flavor", "flee", "flight", "flip", "float", "flock", "floor", "flower", "fluid", "flush", "fly", "foam", "focus", "fog", "foil", "fold", "follow", "food", "foot", "force", "forest", "forget", "fork", "fortune", "forum", "forward", "fossil", "foster", "found", "fox", "fragile", "frame", "frequent", "fresh", "friend", "fringe", "frog", "front", "frost", "frown", "frozen", "fruit", "fuel", "fun", "funny", "furnace", "fury", "future", "gadget", "gain", "galaxy", "gallery", "game", "gap", "garage", "garbage", "garden", "garlic", "garment", "gas", "gasp", "gate", "gather", "gauge", "gaze", "general", "genius", "genre", "gentle", "genuine", "gesture", "ghost", "giant", "gift", "giggle", "ginger", "giraffe", "girl", "give", "glad", "glance", "glare", "glass", "glide", "glimpse", "globe", "gloom", "glory", "glove", "glow", "glue", "goat", "goddess", "gold", "good", "goose", "gorilla", "gospel", "gossip", "govern", "gown", "grab", "grace", "grain", "grant", "grape", "grass", "gravity", "great", "green", "grid", "grief", "grit", "grocery", "group", "grow", "grunt", "guard", "guess", "guide", "guilt", "guitar", "gun", "gym", "habit", "hair", "half", "hammer", "hamster", "hand", "happy", "harbor", "hard", "harsh", "harvest", "hat", "have", "hawk", "hazard", "head", "health", "heart", "heavy", "hedgehog", "height", "hello", "helmet", "help", "hen", "hero", "hidden", "high", "hill", "hint", "hip", "hire", "history", "hobby", "hockey", "hold", "hole", "holiday", "hollow", "home", "honey", "hood", "hope", "horn", "horror", "horse", "hospital", "host", "hotel", "hour", "hover", "hub", "huge", "human", "humble", "humor", "hundred", "hungry", "hunt", "hurdle", "hurry", "hurt", "husband", "hybrid", "ice", "icon", "idea", "identify", "idle", "ignore", "ill", "illegal", "illness", "image", "imitate", "immense", "immune", "impact", "impose", "improve", "impulse", "inch", "include", "income", "increase", "index", "indicate", "indoor", "industry", "infant", "inflict", "inform", "inhale", "inherit", "initial", "inject", "injury", "inmate", "inner", "innocent", "input", "inquiry", "insane", "insect", "inside", "inspire", "install", "intact", "interest", "into", "invest", "invite", "involve", "iron", "island", "isolate", "issue", "item", "ivory", "jacket", "jaguar", "jar", "jazz", "jealous", "jeans", "jelly", "jewel", "job", "join", "joke", "journey", "joy", "judge", "juice", "jump", "jungle", "junior", "junk", "just", "kangaroo", "keen", "keep", "ketchup", "key", "kick", "kid", "kidney", "kind", "kingdom", "kiss", "kit", "kitchen", "kite", "kitten", "kiwi", "knee", "knife", "knock", "know", "lab", "label", "labor", "ladder", "lady", "lake", "lamp", "language", "laptop", "large", "later", "latin", "laugh", "laundry", "lava", "law", "lawn", "lawsuit", "layer", "lazy", "leader", "leaf", "learn", "leave", "lecture", "left", "leg", "legal", "legend", "leisure", "lemon", "lend", "length", "lens", "leopard", "lesson", "letter", "level", "liar", "liberty", "library", "license", "life", "lift", "light", "like", "limb", "limit", "link", "lion", "liquid", "list", "little", "live", "lizard", "load", "loan", "lobster", "local", "lock", "logic", "lonely", "long", "loop", "lottery", "loud", "lounge", "love", "loyal", "lucky", "luggage", "lumber", "lunar", "lunch", "luxury", "lyrics", "machine", "mad", "magic", "magnet", "maid", "mail", "main", "major", "make", "mammal", "man", "manage", "mandate", "mango", "mansion", "manual", "maple", "marble", "march", "margin", "marine", "market", "marriage", "mask", "mass", "master", "match", "material", "math", "matrix", "matter", "maximum", "maze", "meadow", "mean", "measure", "meat", "mechanic", "medal", "media", "melody", "melt", "member", "memory", "mention", "menu", "mercy", "merge", "merit", "merry", "mesh", "message", "metal", "method", "middle", "midnight", "milk", "million", "mimic", "mind", "minimum", "minor", "minute", "miracle", "mirror", "misery", "miss", "mistake", "mix", "mixed", "mixture", "mobile", "model", "modify", "mom", "moment", "monitor", "monkey", "monster", "month", "moon", "moral", "more", "morning", "mosquito", "mother", "motion", "motor", "mountain", "mouse", "move", "movie", "much", "muffin", "mule", "multiply", "muscle", "museum", "mushroom", "music", "must", "mutual", "myself", "mystery", "myth", "naive", "name", "napkin", "narrow", "nasty", "nation", "nature", "near", "neck", "need", "negative", "neglect", "neither", "nephew", "nerve", "nest", "net", "network", "neutral", "never", "news", "next", "nice", "night", "noble", "noise", "nominee", "noodle", "normal", "north", "nose", "notable", "note", "nothing", "notice", "novel", "now", "nuclear", "number", "nurse", "nut", "oak", "obey", "object", "oblige", "obscure", "observe", "obtain", "obvious", "occur", "ocean", "october", "odor", "off", "offer", "office", "often", "oil", "okay", "old", "olive", "olympic", "omit", "once", "one", "onion", "online", "only", "open", "opera", "opinion", "oppose", "option", "orange", "orbit", "orchard", "order", "ordinary", "organ", "orient", "original", "orphan", "ostrich", "other", "outdoor", "outer", "output", "outside", "oval", "oven", "over", "own", "owner", "oxygen", "oyster", "ozone", "pact", "paddle", "page", "pair", "palace", "palm", "panda", "panel", "panic", "panther", "paper", "parade", "parent", "park", "parrot", "party", "pass", "patch", "path", "patient", "patrol", "pattern", "pause", "pave", "payment", "peace", "peanut", "pear", "peasant", "pelican", "pen", "penalty", "pencil", "people", "pepper", "perfect", "permit", "person", "pet", "phone", "photo", "phrase", "physical", "piano", "picnic", "picture", "piece", "pig", "pigeon", "pill", "pilot", "pink", "pioneer", "pipe", "pistol", "pitch", "pizza", "place", "planet", "plastic", "plate", "play", "please", "pledge", "pluck", "plug", "plunge", "poem", "poet", "point", "polar", "pole", "police", "pond", "pony", "pool", "popular", "portion", "position", "possible", "post", "potato", "pottery", "poverty", "powder", "power", "practice", "praise", "predict", "prefer", "prepare", "present", "pretty", "prevent", "price", "pride", "primary", "print", "priority", "prison", "private", "prize", "problem", "process", "produce", "profit", "program", "project", "promote", "proof", "property", "prosper", "protect", "proud", "provide", "public", "pudding", "pull", "pulp", "pulse", "pumpkin", "punch", "pupil", "puppy", "purchase", "purity", "purpose", "purse", "push", "put", "puzzle", "pyramid", "quality", "quantum", "quarter", "question", "quick", "quit", "quiz", "quote", "rabbit", "raccoon", "race", "rack", "radar", "radio", "rail", "rain", "raise", "rally", "ramp", "ranch", "random", "range", "rapid", "rare", "rate", "rather", "raven", "raw", "razor", "ready", "real", "reason", "rebel", "rebuild", "recall", "receive", "recipe", "record", "recycle", "reduce", "reflect", "reform", "refuse", "region", "regret", "regular", "reject", "relax", "release", "relief", "rely", "remain", "remember", "remind", "remove", "render", "renew", "rent", "reopen", "repair", "repeat", "replace", "report", "require", "rescue", "resemble", "resist", "resource", "response", "result", "retire", "retreat", "return", "reunion", "reveal", "review", "reward", "rhythm", "rib", "ribbon", "rice", "rich", "ride", "ridge", "rifle", "right", "rigid", "ring", "riot", "ripple", "risk", "ritual", "rival", "river", "road", "roast", "robot", "robust", "rocket", "romance", "roof", "rookie", "room", "rose", "rotate", "rough", "round", "route", "royal", "rubber", "rude", "rug", "rule", "run", "runway", "rural", "sad", "saddle", "sadness", "safe", "sail", "salad", "salmon", "salon", "salt", "salute", "same", "sample", "sand", "satisfy", "satoshi", "sauce", "sausage", "save", "say", "scale", "scan", "scare", "scatter", "scene", "scheme", "school", "science", "scissors", "scorpion", "scout", "scrap", "screen", "script", "scrub", "sea", "search", "season", "seat", "second", "secret", "section", "security", "seed", "seek", "segment", "select", "sell", "seminar", "senior", "sense", "sentence", "series", "service", "session", "settle", "setup", "seven", "shadow", "shaft", "shallow", "share", "shed", "shell", "sheriff", "shield", "shift", "shine", "ship", "shiver", "shock", "shoe", "shoot", "shop", "short", "shoulder", "shove", "shrimp", "shrug", "shuffle", "shy", "sibling", "sick", "side", "siege", "sight", "sign", "silent", "silk", "silly", "silver", "similar", "simple", "since", "sing", "siren", "sister", "situate", "six", "size", "skate", "sketch", "ski", "skill", "skin", "skirt", "skull", "slab", "slam", "sleep", "slender", "slice", "slide", "slight", "slim", "slogan", "slot", "slow", "slush", "small", "smart", "smile", "smoke", "smooth", "snack", "snake", "snap", "sniff", "snow", "soap", "soccer", "social", "sock", "soda", "soft", "solar", "soldier", "solid", "solution", "solve", "someone", "song", "soon", "sorry", "sort", "soul", "sound", "soup", "source", "south", "space", "spare", "spatial", "spawn", "speak", "special", "speed", "spell", "spend", "sphere", "spice", "spider", "spike", "spin", "spirit", "split", "spoil", "sponsor", "spoon", "sport", "spot", "spray", "spread", "spring", "spy", "square", "squeeze", "squirrel", "stable", "stadium", "staff", "stage", "stairs", "stamp", "stand", "start", "state", "stay", "steak", "steel", "stem", "step", "stereo", "stick", "still", "sting", "stock", "stomach", "stone", "stool", "story", "stove", "strategy", "street", "strike", "strong", "struggle", "student", "stuff", "stumble", "style", "subject", "submit", "subway", "success", "such", "sudden", "suffer", "sugar", "suggest", "suit", "summer", "sun", "sunny", "sunset", "super", "supply", "supreme", "sure", "surface", "surge", "surprise", "surround", "survey", "suspect", "sustain", "swallow", "swamp", "swap", "swarm", "swear", "sweet", "swift", "swim", "swing", "switch", "sword", "symbol", "symptom", "syrup", "system", "table", "tackle", "tag", "tail", "talent", "talk", "tank", "tape", "target", "task", "taste", "tattoo", "taxi", "teach", "team", "tell", "ten", "tenant", "tennis", "tent", "term", "test", "text", "thank", "that", "theme", "then", "theory", "there", "they", "thing", "this", "thought", "three", "thrive", "throw", "thumb", "thunder", "ticket", "tide", "tiger", "tilt", "timber", "time", "tiny", "tip", "tired", "tissue", "title", "toast", "tobacco", "today", "toddler", "toe", "together", "toilet", "token", "tomato", "tomorrow", "tone", "tongue", "tonight", "tool", "tooth", "top", "topic", "topple", "torch", "tornado", "tortoise", "toss", "total", "tourist", "toward", "tower", "town", "toy", "track", "trade", "traffic", "tragic", "train", "transfer", "trap", "trash", "travel", "tray", "treat", "tree", "trend", "trial", "tribe", "trick", "trigger", "trim", "trip", "trophy", "trouble", "truck", "true", "truly", "trumpet", "trust", "truth", "try", "tube", "tuition", "tumble", "tuna", "tunnel", "turkey", "turn", "turtle", "twelve", "twenty", "twice", "twin", "twist", "two", "type", "typical", "ugly", "umbrella", "unable", "unaware", "uncle", "uncover", "under", "undo", "unfair", "unfold", "unhappy", "uniform", "unique", "unit", "universe", "unknown", "unlock", "until", "unusual", "unveil", "update", "upgrade", "uphold", "upon", "upper", "upset", "urban", "urge", "usage", "use", "used", "useful", "useless", "usual", "utility", "vacant", "vacuum", "vague", "valid", "valley", "valve", "van", "vanish", "vapor", "various", "vast", "vault", "vehicle", "velvet", "vendor", "venture", "venue", "verb", "verify", "version", "very", "vessel", "veteran", "viable", "vibrant", "vicious", "victory", "video", "view", "village", "vintage", "violin", "virtual", "virus", "visa", "visit", "visual", "vital", "vivid", "vocal", "voice", "void", "volcano", "volume", "vote", "voyage", "wage", "wagon", "wait", "walk", "wall", "walnut", "want", "warfare", "warm", "warrior", "wash", "wasp", "waste", "water", "wave", "way", "wealth", "weapon", "wear", "weasel", "weather", "web", "wedding", "weekend", "weird", "welcome", "west", "wet", "whale", "what", "wheat", "wheel", "when", "where", "whip", "whisper", "wide", "width", "wife", "wild", "will", "win", "window", "wine", "wing", "wink", "winner", "winter", "wire", "wisdom", "wise", "wish", "witness", "wolf", "woman", "wonder", "wood", "wool", "word", "work", "world", "worry", "worth", "wrap", "wreck", "wrestle", "wrist", "write", "wrong", "yard", "year", "yellow", "you", "young", "youth", "zebra", "zero", "zone", "zoo"];
+                let choicesSet = new Set([correctWord]);
+                
+                while (choicesSet.size < 5) {
+                    let randomDecoy = decoys[Math.floor(Math.random() * decoys.length)];
+                    if (randomDecoy !== correctWord) choicesSet.add(randomDecoy);
+                }
+                
+                let shuffledChoices = Array.from(choicesSet).sort(function() { return Math.random() - 0.5; });
+                
+                document.getElementById("quiz-error-msg").style.display = "none";
+                selectedQuizWord = "";
+                quizSubmitBtn.disabled = true;
+                
+                const optionsGroup = document.getElementById("quiz-options-group");
+                optionsGroup.innerHTML = "";
+                
+                shuffledChoices.forEach(function(choice) {
+                    const choiceDiv = document.createElement("div");
+                    choiceDiv.className = "account-card";
+                    choiceDiv.style.margin = "0";
+                    choiceDiv.style.padding = "12px";
+                    choiceDiv.innerText = choice;
+                    
+                    choiceDiv.addEventListener("click", function() {
+                        const allOptionDivs = optionsGroup.querySelectorAll(".account-card");
+                        allOptionDivs.forEach(function(d) { d.classList.remove("selected"); });
+                        
+                        choiceDiv.classList.add("selected");
+                        selectedQuizWord = choice;
+                        quizSubmitBtn.disabled = false;
+                    });
+                    optionsGroup.appendChild(choiceDiv);
+                });
+                
+                quizModal.classList.add("active");
+            });
+
+            quizCancelBtn.addEventListener("click", function() {
+                quizModal.classList.remove("active");
+                window.location.reload();
+            });
+
+            quizSubmitBtn.addEventListener("click", function() {
+                const correctWord = generatedPhraseArray[correctWordIndex];
+                const errorMsg = document.getElementById("quiz-error-msg");
+
+                if (selectedQuizWord === correctWord) {
+                    quizModal.classList.remove("active");
+                    window.location.reload();
+                } else {
+                    quizModal.classList.remove("active");
+                    errorMsg.style.display = "none";
+                    quizSubmitBtn.disabled = true;
+                    const optionDivs = document.getElementById("quiz-options-group").querySelectorAll(".account-card");
+                    optionDivs.forEach(function(d) { d.classList.remove("selected"); });
+                    selectedQuizWord = "";
+                    revealModal.classList.add("active");
+                }
+            });
+
+            importConfirm.addEventListener("click", function() {
+                const labelName = importAccountNameInput.value.trim();
+                const seedText = importSeedInput.value.trim();
+                if (!seedText) { alert("Please enter your seed phrase."); return; }
+
+                importConfirm.disabled = true;
+                importConfirm.innerText = "Importing...";
+
+                pywebview.api.import_account(labelName, seedText)
+                    .then(function() {
+                        importModal.classList.remove("active");
+                        window.location.reload();
+                    })
+                    .catch(function(err) {
+                        alert("Import failed: " + err);
+                        importConfirm.disabled = false;
+                        importConfirm.innerText = "Import Account";
+                    });
+            });
+            deleteCancelBtn.addEventListener("click", function() {
+                deleteModal.classList.remove("active");
+                activeDeleteIndex = null;
+            });
+
+            deleteConfirmBtn.addEventListener("click", function() {
+                if (activeDeleteIndex === null) return;
+                deleteConfirmBtn.disabled = true;
+                deleteConfirmBtn.innerText = "Deleting...";
+
+                pywebview.api.delete_account(activeDeleteIndex)
+                    .then(function() { window.location.reload(); })
+                    .catch(function(err) {
+                        alert("Deletion failed: " + err);
+                        deleteConfirmBtn.disabled = false;
+                        deleteConfirmBtn.innerText = "Delete Account";
+                        deleteModal.classList.remove("active");
+                    });
+            });
+
+            renameCancelBtn.addEventListener("click", function() {
+                renameModal.classList.remove("active");
+                activeRenameIndex = null;
+            });
+
+            renameConfirmBtn.addEventListener("click", function() {
+                if (activeRenameIndex === null) return;
+                const newName = editAccountNameInput.value.trim();
+                renameConfirmBtn.disabled = true;
+                renameConfirmBtn.innerText = "Saving...";
+
+                pywebview.api.rename_account(activeRenameIndex, newName)
+                    .then(function() { window.location.reload(); })
+                    .catch(function(err) {
+                        alert("Renaming failed: " + err);
+                        renameConfirmBtn.disabled = false;
+                        renameConfirmBtn.innerText = "Save Name";
+                        renameModal.classList.remove("active");
+                    });
+            });
+
+            cards.forEach(function(card) {
+                const index = card.getAttribute("data-index");
+                const address = card.getAttribute("data-address");
+                const deleteBtn = document.getElementById("delete-btn-" + index);
+                const renameBtn = document.getElementById("rename-btn-" + index);
+                const name = card.querySelector(".account-name").innerText;
+                
+                pywebview.api.balance(address)
+                    .then(function(result) {
+                        document.getElementById("balance-" + index).innerHTML = result + " C62";
+                        const balNum = Number(result);
+                        balances[index] = isNaN(balNum) ? 999 : balNum;
+                        
+                        if (!isNaN(balNum)) {
+                            totalBalance = totalBalance + balNum;
+                        }
+
+                        if (balances[index] === 0 && deleteBtn) {
+                            deleteBtn.style.display = "inline-block";
+                        } else if (deleteBtn) {
+                            deleteBtn.style.display = "none";
+                        }
+                    })
+                    .catch(function(err) {
+                        document.getElementById("balance-" + index).innerHTML = "Error";
+                        balances[index] = 999;
+                        if (deleteBtn) deleteBtn.style.display = "none";
+                    })
+                    .finally(function() {
+                        completedRequests++;
+                        if (completedRequests === cards.length) {
+                            document.getElementById("total-balance").innerHTML = '<span>Total Balance: </span>' + totalBalance + " C62";
+                        }
+                    });
+
+                renameBtn.addEventListener("click", function(e) {
+                    e.stopPropagation();
+                    activeRenameIndex = index;
+                    editAccountNameInput.value = name;
+                    renameConfirmBtn.disabled = false;
+                    renameConfirmBtn.innerText = "Save Name";
+                    renameModal.classList.add("active");
+                });
+
+                if (deleteBtn) {
+                    deleteBtn.addEventListener("click", function(e) {
+                        e.stopPropagation();
+                        activeDeleteIndex = index;
+                        deleteModalName.innerText = name;
+                        deleteModalAddress.innerText = address;
+                        
+                        deleteConfirmBtn.disabled = false;
+                        deleteConfirmBtn.innerText = "Delete Account";
+                        deleteModal.classList.add("active");
+                    });
+                }
+
+                const upBtn = card.querySelector(".sort-up-btn");
+                const downBtn = card.querySelector(".sort-down-btn");
+
+                if (upBtn && downBtn) {
+                    upBtn.addEventListener("click", function(e) {
+                        e.stopPropagation();
+                        const prevElement = card.previousElementSibling;
+                        if (prevElement && prevElement.getAttribute("data-index") !== "0") {
+                            listContainer.insertBefore(card, prevElement);
+                            commitNewOrder();
+                        }
+                    });
+
+                    downBtn.addEventListener("click", function(e) {
+                        e.stopPropagation();
+                        const nextElement = card.nextElementSibling;
+                        if (nextElement) {
+                            listContainer.insertBefore(nextElement, card);
+                            commitNewOrder();
+                        }
+                    });
+                }
+            });
+
+            function commitNewOrder() {
+                const updatedCards = document.querySelectorAll(".account-card");
+                const orderArray = [];
+                updatedCards.forEach(function(c) {
+                    orderArray.push(c.getAttribute("data-index"));
+                });
+                
+                pywebview.api.save_account_order(orderArray)
+                    .catch(function(err) {
+                        console.error("Failed saving position maps indices data: ", err);
+                    });
+            }
+        });
+    </script>
+
+
+
+</body>
+</html>

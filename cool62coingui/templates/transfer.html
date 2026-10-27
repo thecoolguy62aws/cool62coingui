@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/global.css">
+    <title>cool62coin Wallet - Transfer</title>
+</head>
+<body>
+    <aside class="sidebar">
+        <h2>cool62coin Wallet</h2>
+        <nav>
+            <a href="/">Accounts</a>
+            <a href="/receive">Receive</a>
+            <a href="/send">Send</a>
+            <a class="sidebar-active" href="/transfer">Move Funds</a>
+            <a href="/history">History</a>
+            <a href="/node">Node</a>
+        </nav>
+    </aside>
+    <main>
+        <div class="header-container">
+            <h3 class="page-title">Move Funds</h3>
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+                <div style="display: flex; gap: 10px;">
+                    <button class="header-refresh-btn" onclick="window.location.reload();">Reload</button>
+                </div>
+                <span class="reload-notice-text">
+                    Balances incorrect? Try reloading. Local nodes may take a long time to sync.
+                </span>
+            </div>
+        </div>
+
+        <form id="transfer-form">
+            <div class="transfer-columns">
+                <div class="column-half">
+                    <p class="text" style="font-weight: 500;">From Account (Source):</p>
+                    <div id="from-selector">
+                        {% for i in range(addresses | length) %}
+                            <div class="account-card from-card" data-index="{{ i }}" data-address="{{ addresses[i] }}">
+                                <p class="account-name">{{ accounts[i] }}</p>
+                                <p class="address">{{ addresses[i] }}</p>
+                                <p id="from-bal-{{ i }}">Checking balance...</p>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="column-half">
+                    <p class="text" style="font-weight: 500;">To Account (Destination):</p>
+                    <div id="to-selector">
+                        {% for i in range(addresses | length) %}
+                            <div class="account-card to-card" data-index="{{ i }}" data-address="{{ addresses[i] }}">
+                                <p class="account-name">{{ accounts[i] }}</p>
+                                <p class="address">{{ addresses[i] }}</p>
+                                <p id="to-bal-{{ i }}">Checking balance...</p>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 2rem; max-width: 500px;">
+                <label for="amount" class="form-label">Amount to Transfer (C62):</label>
+                <input type="number" id="amount" class="address-textbox" step="any" min="0.000001" placeholder="0.00" required>
+                <span style="font-size: 0.85rem; color: #6b7280; margin-top: 0.25rem;">+ 1 C62 network transaction fee applies</span>
+            </div>
+
+            <p id="tx-status" class="status-msg" style="max-width: 500px;"></p>
+
+            <button type="submit" id="transfer-btn" class="send-submit-button" style="max-width: 500px;" disabled>
+                Select Both Accounts
+            </button>
+        </form>
+    </main>
+
+    <div id="confirm-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Confirm Transfer</h3>
+            <p class="modal-warning-text">Review details carefully. Transactions cannot be reversed.</p>
+            
+            <div class="modal-tx-summary">
+                <p><strong>Principal Amount:</strong> <span id="modal-summary-amount">0</span> C62</p>
+                <p><strong>Network Fee:</strong> 1 C62</p>
+                <p style="border-top: 1px solid #e5e7eb; margin-top: 0.5rem; padding-top: 0.5rem;"><strong>Total Deducted:</strong> <span id="modal-summary-total">0</span> C62</p>
+            </div>
+
+            <label class="modal-checkbox-label">
+                <input type="checkbox" id="modal-irreversible-check">
+                <span>I understand this transfer is permanent and completely irreversible.</span>
+            </label>
+
+            <div class="modal-actions">
+                <button type="button" id="modal-cancel-btn" class="modal-btn cancel-btn">Cancel</button>
+                <button type="button" id="modal-confirm-btn" class="modal-btn confirm-action-btn" disabled>Confirm & Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let fromAddress = '';
+        let toAddress = '';
+
+        window.addEventListener('pywebviewready', function() {
+            const fromCards = document.querySelectorAll('.from-card');
+            const toCards = document.querySelectorAll('.to-card');
+            const transferBtn = document.getElementById('transfer-btn');
+            const transferForm = document.getElementById('transfer-form');
+            const txStatus = document.getElementById('tx-status');
+
+            const confirmModal = document.getElementById('confirm-modal');
+            const modalCheck = document.getElementById('modal-irreversible-check');
+            const modalCancelBtn = document.getElementById('modal-cancel-btn');
+            const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+
+            function updateUIStates() {
+                fromCards.forEach(card => {
+                    const addr = card.getAttribute('data-address');
+                    if (addr === toAddress) {
+                        card.style.opacity = '0.4';
+                        card.style.pointerEvents = 'none';
+                    } else {
+                        card.style.opacity = '1';
+                        card.style.pointerEvents = 'auto';
+                    }
+                });
+
+                toCards.forEach(card => {
+                    const addr = card.getAttribute('data-address');
+                    if (addr === fromAddress) {
+                        card.style.opacity = '0.4';
+                        card.style.pointerEvents = 'none';
+                    } else {
+                        card.style.opacity = '1';
+                        card.style.pointerEvents = 'auto';
+                    }
+                });
+
+                const amountInput = document.getElementById('amount').value;
+                if (!fromAddress || !toAddress) {
+                    transferBtn.disabled = true;
+                    transferBtn.innerText = 'Select Both Accounts';
+                } else if (!amountInput || Number(amountInput) <= 0) {
+                    transferBtn.disabled = true;
+                    transferBtn.innerText = 'Enter Valid Amount';
+                } else {
+                    transferBtn.disabled = false;
+                    transferBtn.innerText = 'Transfer cool62coin';
+                }
+            }
+
+            fromCards.forEach(card => {
+                const addr = card.getAttribute('data-address');
+                const idx = card.getAttribute('data-index');
+                
+                card.addEventListener('click', () => {
+                    if (card.classList.contains('selected')) return;
+                    fromCards.forEach(c => c.classList.remove('selected'));
+                    card.classList.add('selected');
+                    fromAddress = addr;
+                    txStatus.style.display = 'none';
+                    updateUIStates();
+                });
+
+                pywebview.api.balance(addr).then(res => {
+                    document.getElementById('from-bal-' + idx).innerHTML = res + ' C62';
+                });
+            });
+
+            toCards.forEach(card => {
+                const addr = card.getAttribute('data-address');
+                const idx = card.getAttribute('data-index');
+
+                card.addEventListener('click', () => {
+                    if (card.classList.contains('selected')) return;
+                    toCards.forEach(c => c.classList.remove('selected'));
+                    card.classList.add('selected');
+                    toAddress = addr;
+                    txStatus.style.display = 'none';
+                    updateUIStates();
+                });
+
+                pywebview.api.balance(addr).then(res => {
+                    document.getElementById('to-bal-' + idx).innerHTML = res + ' C62';
+                });
+            });
+
+            document.getElementById('amount').addEventListener('input', updateUIStates);
+
+            transferForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                if (!fromAddress || !toAddress) return;
+
+                const amt = Number(document.getElementById('amount').value);
+                document.getElementById('modal-summary-amount').innerText = amt;
+                document.getElementById('modal-summary-total').innerText = (amt + 1).toFixed(6);
+
+                modalCheck.checked = false;
+                modalConfirmBtn.disabled = true;
+                confirmModal.classList.add('active');
+            });
+
+            modalCheck.addEventListener('change', function() {
+                modalConfirmBtn.disabled = !modalCheck.checked;
+            });
+
+            modalCancelBtn.addEventListener('click', function() {
+                confirmModal.classList.remove('active');
+            });
+
+            modalConfirmBtn.addEventListener('click', function() {
+                confirmModal.classList.remove('active');
+                const amt = document.getElementById('amount').value;
+
+                transferBtn.disabled = true;
+                transferBtn.innerText = 'Processing...';
+                txStatus.setAttribute('class', 'status-msg status-loading');
+                txStatus.innerText = 'Creating transfer...';
+                txStatus.style.display = 'block';
+
+                pywebview.api.send_transaction(fromAddress, toAddress, amt)
+                    .then(receipt => {
+                        txStatus.setAttribute('class', 'status-msg status-success');
+                        txStatus.innerText = 'Transaction accepted. The transfer will be completed within a few minutes.';
+                        transferForm.reset();
+                        
+                        fromCards.forEach(c => c.classList.remove('selected'));
+                        toCards.forEach(c => c.classList.remove('selected'));
+                        fromAddress = '';
+                        toAddress = '';
+                        updateUIStates();
+                    })
+                    .catch(err => {
+                        txStatus.setAttribute('class', 'status-msg status-error');
+                        txStatus.innerText = err.message ? err.message : 'Error: ' + err;
+                        updateUIStates();
+                    });
+            });
+        });
+    </script>
+</body>
+</html>

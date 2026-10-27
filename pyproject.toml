@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cool62coingui"
+version = "0.0.0"
+description = "The official desktop wallet for cool62coin."
+dependencies = [
+    "pywebview>=5.0",
+    "fastapi[standard]>=0.136.1",
+    "uvicorn>=0.46.0",
+    "cryptography>=48.0.0",
+    "Flask>=3.1.3",
+    "waitress>=3.0.2",
+    "mnemonic>=0.21",
+    "psutil>=7.2.2",
+    "requests>=2.31.0",
+    "PySocks>=1.7.1"
+]
+
+[project.scripts]
+cool62coingui = "cool62coingui.__main__:main"
+
+[tool.setuptools]
+packages = ["cool62coingui"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+cool62coingui = ["*.json", "static/*", "static/**/*"]

@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/global.css">
+    <title>cool62coin Wallet - Send</title>
+</head>
+<body>
+    <aside class="sidebar">
+        <h2>cool62coin Wallet</h2>
+        <nav>
+            <a href="/">Accounts</a>
+            <a href="/receive">Receive</a>
+            <a class="sidebar-active" href="/send">Send</a>
+            <a href="/transfer">Move Funds</a>
+            <a href="/history">History</a>
+            <a href="/node">Node</a>
+        </nav>
+    </aside>
+    <main>
+        <div class="header-container">
+            <h3 class="page-title">Send cool62coin</h3>
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+                <div style="display: flex; gap: 10px;">
+                    <button class="header-refresh-btn" onclick="window.location.reload();">Reload</button>
+                </div>
+                <span class="reload-notice-text">
+                    Balances incorrect? Try reloading. Local nodes may take a long time to sync.
+                </span>
+            </div>
+        </div>
+
+        <p class="text" style="margin-top: 2rem;">Select source account:</p>
+        <div id="account-selector">
+            {% for i in range(addresses | length) %}
+                <div class="account-card" data-index="{{ i }}" data-address="{{ addresses[i] }}">
+                    <p class="account-name">{{ accounts[i] }}</p>
+                    <p class="address">{{ addresses[i] }}</p>
+                    <p id="balance-{{ i }}">Checking balance...</p>
+                </div>
+            {% endfor %}
+        </div>
+
+        <form id="send-form" style="margin-top: 2rem; max-width: 500px;">
+            <input type="hidden" id="selected-from-address" value="">
+
+            <div class="form-group">
+                <label for="to-address" class="form-label">Recipient Address:</label>
+                <input type="text" id="to-address" class="address-textbox" placeholder="Enter destination address" required autocomplete="off">
+            </div>
+
+            <div class="form-group" style="margin-top: 1.5rem;">
+                <label for="amount" class="form-label">Amount (C62):</label>
+                <input type="number" id="amount" class="address-textbox" step="any" min="0.000001" placeholder="0.00" required>
+                <span style="font-size: 0.85rem; color: #6b7280; margin-top: 0.25rem;">+ 1 C62 network transaction fee will be applied</span>
+            </div>
+
+            <div class="form-group" style="margin-top: 1.5rem;">
+                <label for="memo" class="form-label">Memo (Optional):</label>
+                <input type="text" id="memo" class="address-textbox" placeholder="Enter transaction message" autocomplete="off" maxlength="255">
+            </div>
+
+            <p id="tx-status" class="status-msg"></p>
+
+            <button type="submit" id="send-btn" class="send-submit-button" disabled>
+                Select an Account First
+            </button>
+        </form>
+    </main>
+
+    <div id="confirm-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Confirm Transaction</h3>
+            <p class="modal-warning-text">Review details carefully. Transactions cannot be undone.</p>
+            
+            <div class="modal-tx-summary">
+                <p><strong>Amount to Send:</strong> <span id="modal-summary-amount">0</span> C62</p>
+                <p><strong>Network Fee:</strong> 1 C62</p>
+                <p style="border-top: 1px solid #e5e7eb; margin-top: 0.5rem; padding-top: 0.5rem;"><strong>Total Deducted:</strong> <span id="modal-summary-total">0</span> C62</p>
+                <p><strong>Memo:</strong> <span id="modal-summary-memo" style="font-style: italic; color: #4b5563;">None</span></p>
+                <p style="margin-top: 0.5rem;"><strong>Recipient:</strong> <span id="modal-summary-recipient" style="font-family: monospace; word-break: break-all;">-</span></p>
+            </div>
+
+            <label class="modal-checkbox-label">
+                <input type="checkbox" id="modal-irreversible-check">
+                <span>I understand this transaction is permanent and completely irreversible.</span>
+            </label>
+
+            <div class="modal-actions">
+                <button type="button" id="modal-cancel-btn" class="modal-btn cancel-btn">Cancel</button>
+                <button type="button" id="modal-confirm-btn" class="modal-btn confirm-action-btn" disabled>Confirm & Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let totalBalance = 0;
+        let completedRequests = 0;
+        let isAddressValid = false; 
+
+        window.addEventListener('pywebviewready', function() {
+            const cards = document.querySelectorAll('.account-card');
+            const fromAddressInput = document.getElementById('selected-from-address');
+            const sendBtn = document.getElementById('send-btn');
+            const sendForm = document.getElementById('send-form');
+            const txStatus = document.getElementById('tx-status');
+            const toAddressInput = document.getElementById('to-address');
+
+            const confirmModal = document.getElementById('confirm-modal');
+            const modalCheck = document.getElementById('modal-irreversible-check');
+            const modalCancelBtn = document.getElementById('modal-cancel-btn');
+            const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+            const summaryAmount = document.getElementById('modal-summary-amount');
+            const summaryRecipient = document.getElementById('modal-summary-recipient');
+
+            function updateButtonState() {
+                const hasSender = fromAddressInput.value !== '';
+                const hasRecipient = toAddressInput.value.trim() !== '';
+
+                if (!hasSender) {
+                    sendBtn.disabled = true;
+                    sendBtn.innerText = 'Select an Account First';
+                } else if (!hasRecipient) {
+                    sendBtn.disabled = true;
+                    sendBtn.innerText = 'Enter Recipient Address';
+                } else if (!isAddressValid) {
+                    sendBtn.disabled = true;
+                    sendBtn.innerText = 'Invalid Recipient Address';
+                } else {
+                    sendBtn.disabled = false;
+                    sendBtn.innerText = 'Send Transaction';
+                }
+            }
+
+            toAddressInput.addEventListener('input', function() {
+                const addressValue = toAddressInput.value.trim();
+
+                if (addressValue === '') {
+                    toAddressInput.classList.remove('input-invalid', 'input-valid');
+                    isAddressValid = false;
+                    updateButtonState();
+                    return;
+                }
+
+                pywebview.api.validate_address(addressValue)
+                    .then(isValid => {
+                        isAddressValid = isValid;
+                        if (isValid) {
+                            toAddressInput.classList.remove('input-invalid');
+                            toAddressInput.classList.add('input-valid');
+                        } else {
+                            toAddressInput.classList.remove('input-valid');
+                            toAddressInput.classList.add('input-invalid');
+                        }
+                        updateButtonState();
+                    });
+            });
+
+            cards.forEach(card => {
+                const index = card.getAttribute('data-index');
+                const address = card.getAttribute('data-address');
+                
+                card.addEventListener('click', () => {
+                    if (card.classList.contains('selected')) return;
+
+                    cards.forEach(c => c.classList.remove('selected'));
+                    card.classList.add('selected');
+
+                    fromAddressInput.value = address;
+                    txStatus.style.display = 'none';
+                    updateButtonState();
+                });
+
+                pywebview.api.balance(address)
+                    .then(result => {
+                        document.getElementById('balance-' + index).innerHTML = result + ' C62';
+                    });
+            });
+
+            sendForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                if (!fromAddressInput.value || !isAddressValid) return;
+
+                const toAddress = toAddressInput.value.trim();
+
+                let isOwnAddress = false;
+                cards.forEach(card => {
+                    if (card.getAttribute('data-address') === toAddress) {
+                        isOwnAddress = true;
+                    }
+                });
+
+                if (isOwnAddress) {
+                    txStatus.className = "status-msg status-error";
+                    txStatus.innerHTML = "To move funds between your accounts, use the <a class='link' href='/transfer'>Move Funds</a> page.";
+                    txStatus.style.display = "block";
+                    return;
+                }
+
+                const inputAmount = Number(document.getElementById('amount').value);
+                const memoValue = document.getElementById('memo').value.trim();
+
+                summaryAmount.innerText = inputAmount;
+                document.getElementById('modal-summary-total').innerText = (inputAmount + 1).toFixed(6);
+                summaryRecipient.innerText = toAddress;
+                document.getElementById('modal-summary-memo').innerText = memoValue ? memoValue : "None";
+
+                modalCheck.checked = false;
+                modalConfirmBtn.disabled = true;
+                confirmModal.classList.add('active');
+            });
+
+            modalCheck.addEventListener('change', function() {
+                modalConfirmBtn.disabled = !modalCheck.checked;
+            });
+
+            modalCancelBtn.addEventListener('click', function() {
+                confirmModal.classList.remove('active');
+            });
+
+            modalConfirmBtn.addEventListener('click', function() {
+                confirmModal.classList.remove('active');
+
+                const fromAddress = fromAddressInput.value;
+                const toAddress = toAddressInput.value.trim();
+                const amount = document.getElementById('amount').value;
+                const memo = document.getElementById('memo').value.trim();
+
+                sendBtn.disabled = true;
+                sendBtn.innerText = 'Processing...';
+                txStatus.setAttribute('class', 'status-msg status-loading');
+                txStatus.innerText = 'Broadcasting transaction down to the cool62coin network...';
+                txStatus.style.display = 'block';
+
+                pywebview.api.send_transaction(fromAddress, toAddress, amount, memo)
+                    .then(receipt => {
+                        txStatus.setAttribute('class', 'status-msg status-success');
+                        txStatus.innerText = 'Transaction accepted. The transaction amount and network fee will be deducted from your account within a few minutes.';
+                        sendForm.reset();
+                        
+                        cards.forEach(c => c.classList.remove('selected'));
+                        toAddressInput.classList.remove('input-valid', 'input-invalid');
+                        fromAddressInput.value = '';
+                        isAddressValid = false;
+                        updateButtonState();
+                    })
+                    .catch(err => {
+                        txStatus.setAttribute('class', 'status-msg status-error');
+                        txStatus.innerText = err.message ? err.message : 'Error: ' + err;
+                        sendBtn.disabled = false;
+                        sendBtn.innerText = 'Send Transaction';
+                    });
+            });
+        });
+    </script>
+</body>
+</html>

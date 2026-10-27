@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/global.css">
+    <title>cool62coin Wallet</title>
+</head>
+<body>
+    <aside class="sidebar">
+        <h2>cool62coin Wallet</h2>
+        <nav>
+            <a href="/">Accounts</a>
+            <a class="sidebar-active" href="/receive">Receive</a>
+            <a href="/send">Send</a>
+            <a href="/transfer">Move Funds</a>
+            <a href="/history">History</a>
+            <a href="/node">Node</a>
+        </nav>
+    </aside>
+    <main>
+        <div class="header-container">
+            <h3 class="page-title">Receive cool62coin</h3>
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+                <div style="display: flex; gap: 10px;">
+                    <button class="header-refresh-btn" onclick="window.location.reload();">Reload</button>
+                </div>
+                <span class="reload-notice-text">
+                    Balances incorrect? Try reloading. Local nodes may take a long time to sync.
+                </span>
+            </div>
+        </div>
+        <form id="account-form">
+            <p class="text" style="margin-top: 2rem;">Pick an account:</p>
+
+            {% for i in range(addresses | length) %}
+                <div class="account-card" data-index="{{ i }}" data-address="{{ addresses[i] }}">
+                    <p class="account-name">{{ accounts[i] }}</p>
+                    <p class="address">{{ addresses[i] }}</p>
+                    <p id="balance-{{ i }}">Checking balance...</p>
+                </div>
+            {% endfor %}
+        </form>
+        
+        <p class="text" style="margin-top: 2rem;">Send cool62coin to this address:</p>
+        <div class="address-container">
+            <input type="text" id="target-address-input" readonly placeholder="Select an account above..." class="address-textbox">
+            <button id="copy-address-button" type="button" class="copy-button" disabled>Copy</button>
+        </div>
+    </main>
+    <script>
+        window.addEventListener('pywebviewready', function() {
+            const cards = document.querySelectorAll('.account-card');
+            const copyBtn = document.getElementById('copy-address-button');
+            const addressInput = document.getElementById('target-address-input');
+            
+            cards.forEach(card => {
+                const index = card.getAttribute('data-index');
+                const address = card.getAttribute('data-address');
+                
+                card.addEventListener('click', () => {
+                    if (card.classList.contains('selected')) return;
+
+                    cards.forEach(c => c.classList.remove('selected'));
+                    card.classList.add('selected');
+
+                    addressInput.value = address;
+                    copyBtn.disabled = false;
+                    copyBtn.innerText = "Copy";
+                });
+
+                pywebview.api.balance(address)
+                    .then(result => {
+                        document.getElementById(`balance-${index}`).innerHTML = `${result} C62`;
+                    })
+                    .catch(err => {
+                        document.getElementById(`balance-${index}`).innerHTML = "Error";
+                        console.error("Failed to load balance for " + address, err);
+                    });
+            });
+
+            copyBtn.addEventListener('click', () => {
+                if (!addressInput.value) return;
+                
+                navigator.clipboard.writeText(addressInput.value)
+                    .then(() => {
+                        copyBtn.innerText = "Copied!";
+                        setTimeout(() => {
+                            copyBtn.innerText = "Copy";
+                        }, 2000);
+                    })
+                    .catch(err => {
+                        console.error("Could not copy address text string: ", err);
+                    });
+            });
+        });
+    </script>
+</body>
+</html>

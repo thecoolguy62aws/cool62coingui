@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/global.css">
+    <title>cool62coin Wallet - History</title>
+</head>
+<body>
+    <aside class="sidebar">
+        <h2>cool62coin Wallet</h2>
+        <nav>
+            <a href="/">Accounts</a>
+            <a href="/receive">Receive</a>
+            <a href="/send">Send</a>
+            <a href="/transfer">Move Funds</a>
+            <a class="sidebar-active" href="/history">History</a>
+            <a href="/node">Node</a>
+        </nav>
+    </aside>
+    <main>
+        <div class="header-container">
+            <h3 class="page-title">Transaction History</h3>
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+                <div style="display: flex; gap: 10px;">
+                    <button class="header-refresh-btn" onclick="window.location.reload();">Reload</button>
+                </div>
+                <span class="reload-notice-text">
+                    Balances incorrect? Try reloading. Local nodes may take a long time to sync.
+                </span>
+            </div>
+        </div>
+
+        <p class="text" style="margin-top: 2rem;">Select an account to view activity:</p>
+        <div id="account-selector">
+            {% for i in range(addresses | length) %}
+                <div class="account-card" data-index="{{ i }}" data-address="{{ addresses[i] }}">
+                    <p class="account-name">{{ accounts[i] }}</p>
+                    <p class="address">{{ addresses[i] }}</p>
+                    <p id="balance-{{ i }}">Checking balance...</p>
+                </div>
+            {% endfor %}
+        </div>
+
+        <div id="history-section" style="margin-top: 2.5rem; display: none;">
+            <h4 class="text" id="history-title" style="font-weight: 600;">Activity</h4>
+            <div id="history-container">
+                <p class="text" style="color: #6b7280; font-style: italic;">Loading transactions...</p>
+            </div>
+        </div>
+    </main>
+
+    <div id="tx-detail-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 520px;">
+            <h3>Transaction Details</h3>
+            <div style="margin-bottom: 16px; font-size: 0.95rem; color: #374151; line-height: 1.6;">
+                <p><strong>Type: </strong><span id="modal-tx-type"></span></p>
+                <p><strong>Amount: </strong><span id="modal-tx-amount"></span> C62</p>
+                <p><strong>Status: </strong><span id="modal-tx-status"></span></p>
+                <p><strong>Memo: </strong><span id="modal-tx-memo" style="font-style: italic; color: #4b5563;"></span></p>
+            </div>
+            <div style="margin-bottom: 20px;">
+                <p style="font-weight: 600; margin-bottom: 6px; color: #111827;">Address</p>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <input type="text" id="modal-other-address" class="address-textbox" readonly style="font-family: monospace; font-size: 0.9rem; background-color: #f9f9f9;">
+                    <button type="button" id="modal-copy-address-btn" class="copy-button" style="white-space: nowrap;">Copy Address</button>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" id="modal-tx-close-btn" class="modal-btn cancel-btn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.addEventListener("pywebviewready", function() {
+            const cards = document.querySelectorAll(".account-card");
+            const historySection = document.getElementById("history-section");
+            const historyContainer = document.getElementById("history-container");
+            const historyTitle = document.getElementById("history-title");
+
+            const txDetailModal = document.getElementById("tx-detail-modal");
+            const modalTxType = document.getElementById("modal-tx-type");
+            const modalTxAmount = document.getElementById("modal-tx-amount");
+            const modalTxStatus = document.getElementById("modal-tx-status");
+            const modalTxMemo = document.getElementById("modal-tx-memo");
+            const modalOtherAddress = document.getElementById("modal-other-address");
+            const modalCopyAddressBtn = document.getElementById("modal-copy-address-btn");
+            const modalTxCloseBtn = document.getElementById("modal-tx-close-btn");
+
+            modalTxCloseBtn.addEventListener("click", function() {
+                txDetailModal.classList.remove("active");
+                modalCopyAddressBtn.innerText = "Copy Address";
+            });
+
+            txDetailModal.addEventListener("click", function(e) {
+                if (e.target === txDetailModal) {
+                    txDetailModal.classList.remove("active");
+                    modalCopyAddressBtn.innerText = "Copy Address";
+                }
+            });
+
+            modalCopyAddressBtn.addEventListener("click", function() {
+                const addr = modalOtherAddress.value;
+                if (!addr) return;
+                const originalText = modalCopyAddressBtn.innerText;
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(addr).then(function() {
+                        modalCopyAddressBtn.innerText = "Copied!";
+                        setTimeout(function() {
+                            modalCopyAddressBtn.innerText = originalText;
+                        }, 2000);
+                    });
+                } else {
+                    modalOtherAddress.select();
+                    document.execCommand('copy');
+                    modalCopyAddressBtn.innerText = "Copied!";
+                    setTimeout(function() {
+                        modalCopyAddressBtn.innerText = originalText;
+                    }, 2000);
+                }
+            });
+
+            cards.forEach(card => {
+                const index = card.getAttribute("data-index");
+                const address = card.getAttribute("data-address");
+                const accountName = card.querySelector(".account-name").innerText;
+
+                card.addEventListener("click", () => {
+                    if (card.classList.contains("selected")) return;
+
+                    cards.forEach(c => c.classList.remove("selected"));
+                    card.classList.add("selected");
+
+                    historySection.style.display = "block";
+                    historyTitle.innerText = "Activity for " + accountName;
+                    historyContainer.innerHTML = '<p class="text" style="color: #6b7280; font-style: italic;">Loading transactions...</p>';
+
+                    pywebview.api.get_history(address)
+                        .then(txs => {
+                            if (!txs || txs.length === 0) {
+                                historyContainer.innerHTML = '<p class="text" style="color: #6b7280; font-style: italic;">No transactions found for this account.</p>';
+                                return;
+                            }
+
+                            let html = '<table class="history-table">';
+                            html += '<thead><tr><th>Type</th><th>Address</th><th>Amount</th><th>Memo</th><th>Status</th></tr></thead><tbody>';
+
+                            txs.forEach((tx, txIndex) => {
+                                const isSender = tx.sender === address;
+                                const txType = isSender ? "SENT" : "RECEIVED";
+                                const typeClass = isSender ? "tx-type-sent" : "tx-type-received";
+                                
+                                const displayAddr = isSender ? tx.receiver : tx.sender;
+                                const shortAddr = displayAddr.substring(0, 14) + "...";
+                                
+                                const amountPrefix = isSender ? "-" : "+";
+                                const memoText = tx.memo ? tx.memo : "-";
+
+                                html += '<tr class="history-row" data-tx-index="' + txIndex + '" style="cursor: pointer;">';
+                                html += '<td><span class="tx-badge ' + typeClass + '">' + txType + '</span></td>';
+                                html += '<td class="monospace" title="' + displayAddr + '">' + shortAddr + '</td>';
+                                html += '<td class="font-weight: 600;">' + amountPrefix + ' ' + tx.amount + ' C62</td>';
+                                html += '<td class="history-memo-cell">' + memoText + '</td>';
+                                html += '<td><span class="status-indicator">' + tx.status + '</span></td>';
+                                html += '</tr>';
+                            });
+
+                            html += '</tbody></table>';
+                            historyContainer.innerHTML = html;
+
+                            const rows = historyContainer.querySelectorAll(".history-row");
+                            rows.forEach(row => {
+                                row.addEventListener("click", function() {
+                                    const idx = parseInt(this.getAttribute("data-tx-index"));
+                                    const tx = txs[idx];
+                                    const isSender = tx.sender === address;
+                                    const txType = isSender ? "SENT" : "RECEIVED";
+                                    const displayAddr = isSender ? tx.receiver : tx.sender;
+                                    const amountPrefix = isSender ? "-" : "+";
+
+                                    modalTxType.innerText = txType;
+                                    modalTxAmount.innerText = amountPrefix + " " + tx.amount;
+                                    modalTxStatus.innerText = tx.status;
+                                    modalTxMemo.innerText = tx.memo && tx.memo.trim() ? tx.memo : "None";
+                                    modalOtherAddress.value = displayAddr || "";
+                                    modalCopyAddressBtn.innerText = "Copy Address";
+                                    txDetailModal.classList.add("active");
+                                });
+                            });
+                        })
+                        .catch(err => {
+                            console.error(err);
+                            historyContainer.innerHTML = '<p class="text" style="color: #dc2626;">Failed to load transaction history logs.</p>';
+                        });
+                });
+
+                pywebview.api.balance(address)
+                    .then(result => {
+                        document.getElementById("balance-" + index).innerHTML = result + " C62";
+                    });
+            });
+        });
+    </script>
+</body>
+</html>
