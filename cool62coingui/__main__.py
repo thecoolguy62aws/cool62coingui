@@ -358,6 +358,7 @@ class Api:
                                 "amount": tx.get("amount"),
                                 "nonce": tx.get("nonce"),
                                 "memo": tx.get("memo", ""),
+                                "signature": tx.get("signature"),
                                 "status": "Unconfirmed"
                             })
             except Exception as pool_err:
@@ -394,6 +395,7 @@ class Api:
                                 "amount": tx.get("amount"),
                                 "nonce": tx.get("nonce"),
                                 "memo": tx.get("memo", ""),
+                                "signature": tx.get("signature"),
                                 "status": f"Mined (Block {block_height})"
                             })
             except Exception as chain_err:

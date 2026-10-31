@@ -51,7 +51,7 @@
     </main>
 
     <div id="tx-detail-modal" class="modal-overlay">
-        <div class="modal-content" style="max-width: 520px;">
+        <div class="modal-content" style="max-width: 825px;">
             <h3>Transaction Details</h3>
             <div style="margin-bottom: 16px; font-size: 0.95rem; color: #374151; line-height: 1.6;">
                 <p><strong>Type: </strong><span id="modal-tx-type"></span></p>
@@ -64,6 +64,11 @@
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <input type="text" id="modal-other-address" class="address-textbox" readonly style="font-family: monospace; font-size: 0.9rem; background-color: #f9f9f9;">
                     <button type="button" id="modal-copy-address-btn" class="copy-button" style="white-space: nowrap;">Copy Address</button>
+                </div>
+                <p style="font-weight: 600; margin-bottom: 6px; margin-top: 6px; color: #111827;">Transaction ID</p>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <input type="text" id="modal-tx-id" class="address-textbox" readonly style="font-family: monospace; font-size: 0.9rem; background-color: #f9f9f9;">
+                    <button type="button" id="modal-copy-tx-id-btn" class="copy-button" style="white-space: nowrap;">Copy Transaction ID</button>
                 </div>
             </div>
             <div class="modal-actions">
@@ -86,6 +91,8 @@
             const modalTxMemo = document.getElementById("modal-tx-memo");
             const modalOtherAddress = document.getElementById("modal-other-address");
             const modalCopyAddressBtn = document.getElementById("modal-copy-address-btn");
+            const modalTxID = document.getElementById("modal-tx-id");
+            const modalCopyTxIDBtn = document.getElementById("modal-copy-tx-id-btn");
             const modalTxCloseBtn = document.getElementById("modal-tx-close-btn");
 
             modalTxCloseBtn.addEventListener("click", function() {
@@ -117,6 +124,27 @@
                     modalCopyAddressBtn.innerText = "Copied!";
                     setTimeout(function() {
                         modalCopyAddressBtn.innerText = originalText;
+                    }, 2000);
+                }
+            });
+
+            modalCopyTxIDBtn.addEventListener("click", function() {
+                const id = modalTxID.value;
+                if (!id) return;
+                const originalText = modalCopyTxIDBtn.innerText;
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(id).then(function() {
+                        modalCopyTxIDBtn.innerText = "Copied!";
+                        setTimeout(function() {
+                            modalCopyTxIDBtn.innerText = originalText;
+                        }, 2000);
+                    });
+                } else {
+                    modalTxID.select();
+                    document.execCommand('copy');
+                    modalCopyTxIDBtn.innerText = "Copied!";
+                    setTimeout(function() {
+                        modalCopyTxIDBtn.innerText = originalText;
                     }, 2000);
                 }
             });
@@ -178,6 +206,7 @@
                                     const txType = isSender ? "SENT" : "RECEIVED";
                                     const displayAddr = isSender ? tx.receiver : tx.sender;
                                     const amountPrefix = isSender ? "-" : "+";
+                                    const txID = tx["signature"];
 
                                     modalTxType.innerText = txType;
                                     modalTxAmount.innerText = amountPrefix + " " + tx.amount;
@@ -185,6 +214,7 @@
                                     modalTxMemo.innerText = tx.memo && tx.memo.trim() ? tx.memo : "None";
                                     modalOtherAddress.value = displayAddr || "";
                                     modalCopyAddressBtn.innerText = "Copy Address";
+                                    modalTxID.value = txID;
                                     txDetailModal.classList.add("active");
                                 });
                             });
