@@ -60,12 +60,12 @@
                 <p><strong>Memo: </strong><span id="modal-tx-memo" style="font-style: italic; color: #4b5563;"></span></p>
             </div>
             <div style="margin-bottom: 20px;">
-                <p style="font-weight: 600; margin-bottom: 6px; color: #111827;">Address</p>
+                <p style="font-weight: 600; margin-bottom: 6px; color: #111827;" id="address-label">Address</p>
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <input type="text" id="modal-other-address" class="address-textbox" readonly style="font-family: monospace; font-size: 0.9rem; background-color: #f9f9f9;">
                     <button type="button" id="modal-copy-address-btn" class="copy-button" style="white-space: nowrap;">Copy Address</button>
                 </div>
-                <p style="font-weight: 600; margin-bottom: 6px; margin-top: 6px; color: #111827;">Transaction ID</p>
+                <p style="font-weight: 600; margin-bottom: 6px; margin-top: 6px; color: #111827;" id="tx-id-label">Transaction ID</p>
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <input type="text" id="modal-tx-id" class="address-textbox" readonly style="font-family: monospace; font-size: 0.9rem; background-color: #f9f9f9;">
                     <button type="button" id="modal-copy-tx-id-btn" class="copy-button" style="white-space: nowrap;">Copy Transaction ID</button>
@@ -176,8 +176,10 @@
 
                             txs.forEach((tx, txIndex) => {
                                 const isSender = tx.sender === address;
-                                const txType = isSender ? "SENT" : "RECEIVED";
-                                const typeClass = isSender ? "tx-type-sent" : "tx-type-received";
+                                let txType = isSender ? "SENT" : "RECEIVED";
+                                if (tx.sender == "Mined") {txType = "MINED"}
+                                let typeClass = isSender ? "tx-type-sent" : "tx-type-received";
+                                if (tx.sender == "Mined") {typeClass = "tx-type-mined"}
                                 
                                 const displayAddr = isSender ? tx.receiver : tx.sender;
                                 const shortAddr = displayAddr.substring(0, 14) + "...";
@@ -187,10 +189,18 @@
 
                                 html += '<tr class="history-row" data-tx-index="' + txIndex + '" style="cursor: pointer;">';
                                 html += '<td><span class="tx-badge ' + typeClass + '">' + txType + '</span></td>';
-                                html += '<td class="monospace" title="' + displayAddr + '">' + shortAddr + '</td>';
+                                if (displayAddr != "Mined") {
+                                    html += '<td class="monospace" title="' + displayAddr + '">' + shortAddr + '</td>';
+                                } else {
+                                    html += '<td class="monospace" title="' + displayAddr + '">' + '-' + '</td>';
+                                }
                                 html += '<td class="font-weight: 600;">' + amountPrefix + ' ' + tx.amount + ' C62</td>';
                                 html += '<td class="history-memo-cell">' + memoText + '</td>';
-                                html += '<td><span class="status-indicator">' + tx.status + '</span></td>';
+                                if (displayAddr != "Mined") {
+                                    html += '<td><span class="status-indicator">' + tx.status + '</span></td>';
+                                } else {
+                                    html += '<td><span class="status-indicator">' + tx.status + '</span></td>';
+                                }
                                 html += '</tr>';
                             });
 
@@ -203,8 +213,10 @@
                                     const idx = parseInt(this.getAttribute("data-tx-index"));
                                     const tx = txs[idx];
                                     const isSender = tx.sender === address;
-                                    const txType = isSender ? "SENT" : "RECEIVED";
-                                    const displayAddr = isSender ? tx.receiver : tx.sender;
+                                    let txType = isSender ? "SENT" : "RECEIVED";
+                                    if (tx.sender == "Mined") {txType = "MINED"}
+                                    let displayAddr = isSender ? tx.receiver : tx.sender;
+                                    if (displayAddr == "Mined") {displayAddr = "N/A"}
                                     const amountPrefix = isSender ? "-" : "+";
                                     const txID = tx["signature"];
 

@@ -400,9 +400,30 @@ class Api:
                             })
             except Exception as chain_err:
                 sys.stderr.write(f"Could not read chain history: {chain_err}\n")
-
-            tx_history.sort(key=lambda x: x.get("nonce", 0), reverse=True)
-            return tx_history
+        
+            try:
+                for block in blocks:
+                    block_height = block.get("height")
+                    if block_height is None:
+                        block_height = block.get("index")
+                    if block_height is None:
+                        block_height = "?"
+                    
+                    if block.get("miner") == address:
+                        tx_history.append({
+                            "sender": "Mined",
+                            "receiver": address,
+                            "amount": 100,
+                            "nonce": block.get("timestamp"),
+                            "memo": "",
+                            "signature": "N/A",
+                            "status": f"Mined (Block {block_height})"
+                        })
+                
+                tx_history.sort(key=lambda x: int(x.get("nonce")) if str(x.get("nonce", "")).isdigit() else 0, reverse=True)
+                return tx_history
+            except Exception as mining_err:
+                sys.stderr.write(f"Could not read mined blocks: {mining_err}\n")
 
         except Exception as e:
             sys.stderr.write(f"Error compiling transaction history: {e}\n")

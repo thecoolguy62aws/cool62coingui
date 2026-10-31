@@ -525,6 +525,12 @@ main {
     border: 1px solid #86efac;
 }
 
+.tx-type-mined {
+    background-color: #ecffff;
+    color: #0084c2;
+    border: 1px solid #5ccbff;
+}
+
 .status-indicator {
     font-size: 0.85rem;
     color: #4b5563;
