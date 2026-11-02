@@ -485,10 +485,8 @@
                     upBtn.addEventListener("click", function(e) {
                         e.stopPropagation();
                         const prevElement = card.previousElementSibling;
-                        if (prevElement && prevElement.getAttribute("data-index") !== "0") {
-                            listContainer.insertBefore(card, prevElement);
-                            commitNewOrder();
-                        }
+                        listContainer.insertBefore(card, prevElement);
+                        commitNewOrder();
                     });
 
                     downBtn.addEventListener("click", function(e) {
