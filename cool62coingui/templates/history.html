@@ -190,16 +190,16 @@
                                 html += '<tr class="history-row" data-tx-index="' + txIndex + '" style="cursor: pointer;">';
                                 html += '<td><span class="tx-badge ' + typeClass + '">' + txType + '</span></td>';
                                 if (displayAddr != "Mined") {
-                                    html += '<td class="monospace" title="' + displayAddr + '">' + shortAddr + '</td>';
+                                    html += '<td class="monospace" style="user-select: none;" title="' + displayAddr + '">' + shortAddr + '</td>';
                                 } else {
-                                    html += '<td class="monospace" title="' + displayAddr + '">' + '-' + '</td>';
+                                    html += '<td class="monospace" style="user-select: none;" title="' + displayAddr + '">' + '-' + '</td>';
                                 }
-                                html += '<td class="font-weight: 600;">' + amountPrefix + ' ' + tx.amount + ' C62</td>';
-                                html += '<td class="history-memo-cell">' + memoText + '</td>';
+                                html += '<td class="font-weight: 600;" style="user-select: none;">' + amountPrefix + ' ' + tx.amount + ' C62</td>';
+                                html += '<td class="history-memo-cell" style="user-select: none;">' + memoText + '</td>';
                                 if (displayAddr != "Mined") {
-                                    html += '<td><span class="status-indicator">' + tx.status + '</span></td>';
+                                    html += '<td><span class="status-indicator" style="user-select: none;">' + tx.status + '</span></td>';
                                 } else {
-                                    html += '<td><span class="status-indicator">' + tx.status + '</span></td>';
+                                    html += '<td><span class="status-indicator" style="user-select: none;">' + tx.status + '</span></td>';
                                 }
                                 html += '</tr>';
                             });
