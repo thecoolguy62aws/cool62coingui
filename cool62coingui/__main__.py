@@ -45,6 +45,45 @@ def _node(base, path, method="GET", body=None):
         sys.exit(1)
     return resp.json()
 
+
+_height_cache = {"at": 0.0, "height": None}
+
+
+def _node_height():
+    now = time.time()
+    if now - _height_cache["at"] < 5:
+        return _height_cache["height"]
+    height = None
+    try:
+        base = config.get("node", "https://coinnode.cool62.net").rstrip("/")
+        resp = requests.get(base + "/info", timeout=3)
+        if resp.ok:
+            raw = resp.json().get("height")
+            height = int(raw) if raw is not None else None
+    except Exception:
+        height = None
+    _height_cache["at"] = now
+    _height_cache["height"] = height
+    return height
+
+
+def _canonical(address):
+    try:
+        return core.canonical_address(address)
+    except Exception:
+        return address
+
+
+def _accounts_context():
+    height = _node_height()
+    addresses = []
+    accounts = []
+    for account in config.get("accounts", []):
+        pub_key = serialization.load_pem_public_key(account[1].encode("utf-8"))
+        addresses.append(core.display_address_from_public_key(pub_key, height))
+        accounts.append(account[2])
+    return accounts, addresses
+
 def _kill_process_by_port(port):
     for proc in psutil.process_iter(['pid', 'name']):
         try:
@@ -60,15 +99,7 @@ def _kill_process_by_port(port):
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
-    addresses = []
-    accounts = []
-    
-    accounts_list = config.get("accounts", [])
-    
-    for account in accounts_list:
-        addresses.append(core.address_from_public_key(serialization.load_pem_public_key(account[1].encode("utf-8"))))
-        accounts.append(account[2])
-        
+    accounts, addresses = _accounts_context()
     return templates.TemplateResponse(
         request,
         name="index.html",
@@ -77,11 +108,7 @@ async def read_root(request: Request):
 
 @app.get("/receive", response_class=HTMLResponse)
 async def read_receive_page(request: Request):
-    addresses = []
-    accounts = []
-    for account in config["accounts"]:
-        addresses.append(core.address_from_public_key(serialization.load_pem_public_key(account[1].encode("utf-8"))))
-        accounts.append(account[2])
+    accounts, addresses = _accounts_context()
     return templates.TemplateResponse(
         request,
         name="receive.html",
@@ -90,11 +117,7 @@ async def read_receive_page(request: Request):
 
 @app.get("/send", response_class=HTMLResponse)
 async def read_send_page(request: Request):
-    addresses = []
-    accounts = []
-    for account in config["accounts"]:
-        addresses.append(core.address_from_public_key(serialization.load_pem_public_key(account[1].encode("utf-8"))))
-        accounts.append(account[2])
+    accounts, addresses = _accounts_context()
     return templates.TemplateResponse(
         request,
         name="send.html",
@@ -103,11 +126,7 @@ async def read_send_page(request: Request):
 
 @app.get("/transfer", response_class=HTMLResponse)
 async def read_transfer_page(request: Request):
-    addresses = []
-    accounts = []
-    for account in config["accounts"]:
-        addresses.append(core.address_from_public_key(serialization.load_pem_public_key(account[1].encode("utf-8"))))
-        accounts.append(account[2])
+    accounts, addresses = _accounts_context()
     return templates.TemplateResponse(
         request,
         name="transfer.html",
@@ -116,11 +135,7 @@ async def read_transfer_page(request: Request):
 
 @app.get("/history", response_class=HTMLResponse)
 async def read_history_page(request: Request):
-    addresses = []
-    accounts = []
-    for account in config["accounts"]:
-        addresses.append(core.address_from_public_key(serialization.load_pem_public_key(account[1].encode("utf-8"))))
-        accounts.append(account[2])
+    accounts, addresses = _accounts_context()
     return templates.TemplateResponse(
         request,
         name="history.html",
@@ -230,7 +245,7 @@ class Api:
 
             target_account = config["accounts"][idx]
             pub_key = serialization.load_pem_public_key(target_account[1].encode("utf-8"))
-            address = core.address_from_public_key(pub_key)
+            address = core.address_from_public_key(pub_key, core.ADDRESS_SCHEME_HEX)
 
             node_data = _node(config["node"], f"/balance?address={address}")
             current_balance = float(node_data["balance"])
@@ -264,6 +279,7 @@ class Api:
     
     def balance(self, address):
         try:
+            address = core.canonical_address(address)
             node_data = _node(config["node"], f"/balance?address={address}")
             raw_balance = node_data["balance"]
             
@@ -283,23 +299,38 @@ class Api:
                 
             if amt_float < 0:
                 raise Exception("Transaction amount must be non-negative")
-                
-            if not core.is_valid_address(to_address):
+
+            height = _node_height()
+
+            if not core.is_valid_address(from_address, height):
+                raise Exception("Sender address is not a valid cool62coin address structure.")
+
+            if not core.is_valid_address(to_address, height):
+                if (core.is_valid_address(to_address)
+                        and height is not None
+                        and height < core.BECH32_ACTIVATION):
+                    raise Exception(
+                        f"Bech32 addresses activate at block {core.BECH32_ACTIVATION} "
+                        f"(current height {height}).")
                 raise Exception("Recipient address is not a valid cool62coin address structure.")
 
-            node_data = _node(config["node"], f"/balance?address={from_address}")
+            canonical_from = core.canonical_address(from_address)
+
+            node_data = _node(config["node"], f"/balance?address={canonical_from}")
             current_balance = float(node_data["balance"])
             if current_balance < (amt_float + 1.0):
                 raise Exception(f"Insufficient funds. You need at least {amt_float + 1.0} C62 (includes 1 C62 network fee) but only have {current_balance} C62.")
 
             target_account = None
+            sender_address = None
             for account in config["accounts"]:
                 pub_key = serialization.load_pem_public_key(account[1].encode("utf-8"))
-                derived_addr = core.address_from_public_key(pub_key)
-                if derived_addr == from_address:
+                derived_addr = core.address_from_public_key(pub_key, core.ADDRESS_SCHEME_HEX)
+                if core.canonical_address(derived_addr) == canonical_from:
                     target_account = account
+                    sender_address = derived_addr
                     break
-            
+
             if not target_account:
                 raise Exception("The key context for selected account address was not found in wallet.json.")
 
@@ -312,10 +343,10 @@ class Api:
             memo_str = memo.strip() if memo and memo.strip() else None
 
             nonce = int(time.time())
-            signature = core.sign_transaction(private_key, from_address, to_address, amt_float, nonce, memo_str)
+            signature = core.sign_transaction(private_key, sender_address, to_address, amt_float, nonce, memo_str)
 
             tx_payload = {
-                "sender": from_address,
+                "sender": sender_address,
                 "receiver": to_address,
                 "amount": amt_float,
                 "nonce": nonce,
@@ -334,7 +365,7 @@ class Api:
 
     def validate_address(self, address):
         try:
-            return core.is_valid_address(address)
+            return core.is_valid_address(address, _node_height())
         except Exception:
             return False
     
@@ -342,19 +373,26 @@ class Api:
         try:
             tx_history = []
             seen_transactions = set()
+            target = _canonical(address)
 
             try:
                 pool_data = _node(config["node"], "/txpool")
                 pool_txs = pool_data.get("transactions", pool_data.get("txpool", []))
                 for tx in pool_txs:
-                    if tx.get("sender") == address or tx.get("receiver") == address:
-                        tx_key = (tx.get("sender"), tx.get("receiver"), tx.get("nonce"), float(tx.get("amount", 0)))
+                    if _canonical(tx.get("sender")) == target or _canonical(tx.get("receiver")) == target:
+                        tx_key = (_canonical(tx.get("sender")), _canonical(tx.get("receiver")), tx.get("nonce"), float(tx.get("amount", 0)))
                         
                         if tx_key not in seen_transactions:
                             seen_transactions.add(tx_key)
+                            sender = tx.get("sender")
+                            receiver = tx.get("receiver")
+                            if _canonical(sender) == target:
+                                sender = address
+                            if _canonical(receiver) == target:
+                                receiver = address
                             tx_history.append({
-                                "sender": tx.get("sender"),
-                                "receiver": tx.get("receiver"),
+                                "sender": sender,
+                                "receiver": receiver,
                                 "amount": tx.get("amount"),
                                 "nonce": tx.get("nonce"),
                                 "memo": tx.get("memo", ""),
@@ -376,22 +414,28 @@ class Api:
                         block_height = "?"
                         
                     for tx in block.get("transactions", []):
-                        if tx.get("sender") == address or tx.get("receiver") == address:
-                            tx_key = (tx.get("sender"), tx.get("receiver"), tx.get("nonce"), float(tx.get("amount", 0)))
+                        if _canonical(tx.get("sender")) == target or _canonical(tx.get("receiver")) == target:
+                            tx_key = (_canonical(tx.get("sender")), _canonical(tx.get("receiver")), tx.get("nonce"), float(tx.get("amount", 0)))
                             
                             if tx_key in seen_transactions:
                                 for existing_tx in tx_history:
-                                    if (existing_tx["sender"] == tx.get("sender") and 
-                                        existing_tx["receiver"] == tx.get("receiver") and 
+                                    if (_canonical(existing_tx["sender"]) == _canonical(tx.get("sender")) and
+                                        _canonical(existing_tx["receiver"]) == _canonical(tx.get("receiver")) and
                                         existing_tx["nonce"] == tx.get("nonce") and 
                                         "?" in str(existing_tx["status"])):
                                         existing_tx["status"] = f"Mined (Block {block_height})"
                                 continue
 
                             seen_transactions.add(tx_key)
+                            sender = tx.get("sender")
+                            receiver = tx.get("receiver")
+                            if _canonical(sender) == target:
+                                sender = address
+                            if _canonical(receiver) == target:
+                                receiver = address
                             tx_history.append({
-                                "sender": tx.get("sender"),
-                                "receiver": tx.get("receiver"),
+                                "sender": sender,
+                                "receiver": receiver,
                                 "amount": tx.get("amount"),
                                 "nonce": tx.get("nonce"),
                                 "memo": tx.get("memo", ""),
@@ -409,7 +453,7 @@ class Api:
                     if block_height is None:
                         block_height = "?"
                     
-                    if block.get("miner") == address:
+                    if _canonical(block.get("miner")) == target:
                         tx_history.append({
                             "sender": "Mined",
                             "receiver": address,

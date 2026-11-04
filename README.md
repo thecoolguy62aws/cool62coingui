@@ -24,4 +24,13 @@ Unfortunately, I haven't implemented install scripts for these operating systems
 
 When you open the app for the first time, you will see a banner greeting you and prompting to to create an account. Once you do this, you will be able to see your balance and make transactions and transfers.
 
+## Addresses
+
+cool62coin supports two encodings for the same Ed25519 account:
+
+- **Hex** (legacy): the original address format.
+- **Bech32m**: a `c62...` address using the BIP350 checksum.
+
+Both encodings share the same balance, and accounts do not need to be migrated. Bech32 addresses become valid on the network at block 1500. Until the connected node reports that height, the wallet shows the legacy hex form so your addresses remain usable; after activation it displays Bech32 by default.
+
 **Highly Recommended**: For increased privacy, you should go to the `Node` page and switch it to `Background Local Node`. When you close the app, the node will automatically stop, and when you open it, it will automatically start again. Note that while the node is syncing with the network your balances may appear incorrect for a while (about 5 minutes). Make sure to periodically hit `Reload` to check if your balances are updated!
