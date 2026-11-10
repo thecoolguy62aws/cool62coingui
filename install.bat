@@ -25,7 +25,7 @@ echo.
 echo [2/3] Installing dependencies...
 python -m pip install --upgrade pip
 pip install .
-curl -L "https://dist.torproject.org/torbrowser/15.0.26/tor-expert-bundle-windows-x86_64-15.0.26.tar.gz" --output "%TEMP%\cool62coingui-tor-expert-bundle.tar.gz"
+curl -L "https://dist.torproject.org/torbrowser/16.0.1/tor-expert-bundle-windows-x86_64-16.0.1.tar.gz" --output "%TEMP%\cool62coingui-tor-expert-bundle.tar.gz"
 mkdir "%TEMP%\cool62coingui-tor-expert-bundle"
 tar -xzf "%TEMP%\cool62coingui-tor-expert-bundle.tar.gz" -C "%TEMP%\cool62coingui-tor-expert-bundle"
 copy "%TEMP%\cool62coingui-tor-expert-bundle\tor\tor.exe" "%APP_DIR%\cool62coingui\"
