@@ -189,8 +189,8 @@
         let totalBalance = 0;
         let completedRequests = 0;
         const balances = {};
-        let activeDeleteIndex = null; 
-        let activeRenameIndex = null; 
+        let activeDeleteAddress = null;
+        let activeRenameAddress = null;
 
         let generatedPhraseArray = [];
         let correctWordIndex = -1;
@@ -382,15 +382,15 @@
             });
             deleteCancelBtn.addEventListener("click", function() {
                 deleteModal.classList.remove("active");
-                activeDeleteIndex = null;
+                activeDeleteAddress = null;
             });
 
             deleteConfirmBtn.addEventListener("click", function() {
-                if (activeDeleteIndex === null) return;
+                if (activeDeleteAddress === null) return;
                 deleteConfirmBtn.disabled = true;
                 deleteConfirmBtn.innerText = "Deleting...";
 
-                pywebview.api.delete_account(activeDeleteIndex)
+                pywebview.api.delete_account(activeDeleteAddress)
                     .then(function() { window.location.reload(); })
                     .catch(function(err) {
                         alert("Deletion failed: " + err);
@@ -402,16 +402,16 @@
 
             renameCancelBtn.addEventListener("click", function() {
                 renameModal.classList.remove("active");
-                activeRenameIndex = null;
+                activeRenameAddress = null;
             });
 
             renameConfirmBtn.addEventListener("click", function() {
-                if (activeRenameIndex === null) return;
+                if (activeRenameAddress === null) return;
                 const newName = editAccountNameInput.value.trim();
                 renameConfirmBtn.disabled = true;
                 renameConfirmBtn.innerText = "Saving...";
 
-                pywebview.api.rename_account(activeRenameIndex, newName)
+                pywebview.api.rename_account(activeRenameAddress, newName)
                     .then(function() { window.location.reload(); })
                     .catch(function(err) {
                         alert("Renaming failed: " + err);
@@ -423,12 +423,10 @@
 
             cards.forEach(function(card) {
                 const index = card.getAttribute("data-index");
-                const address = card.getAttribute("data-address");
                 const deleteBtn = document.getElementById("delete-btn-" + index);
                 const renameBtn = document.getElementById("rename-btn-" + index);
-                const name = card.querySelector(".account-name").innerText;
                 
-                pywebview.api.balance(address)
+                pywebview.api.balance(card.getAttribute("data-address"))
                     .then(function(result) {
                         document.getElementById("balance-" + index).innerHTML = result + " C62";
                         const balNum = Number(result);
@@ -444,7 +442,7 @@
                             deleteBtn.style.display = "none";
                         }
                     })
-                    .catch(function(err) {
+                    .catch(function() {
                         document.getElementById("balance-" + index).innerHTML = "Error";
                         balances[index] = 999;
                         if (deleteBtn) deleteBtn.style.display = "none";
@@ -458,8 +456,8 @@
 
                 renameBtn.addEventListener("click", function(e) {
                     e.stopPropagation();
-                    activeRenameIndex = index;
-                    editAccountNameInput.value = name;
+                    activeRenameAddress = card.getAttribute("data-address");
+                    editAccountNameInput.value = card.querySelector(".account-name").innerText;
                     renameConfirmBtn.disabled = false;
                     renameConfirmBtn.innerText = "Save Name";
                     renameModal.classList.add("active");
@@ -468,9 +466,9 @@
                 if (deleteBtn) {
                     deleteBtn.addEventListener("click", function(e) {
                         e.stopPropagation();
-                        activeDeleteIndex = index;
-                        deleteModalName.innerText = name;
-                        deleteModalAddress.innerText = address;
+                        activeDeleteAddress = card.getAttribute("data-address");
+                        deleteModalName.innerText = card.querySelector(".account-name").innerText;
+                        deleteModalAddress.innerText = card.getAttribute("data-address");
                         
                         deleteConfirmBtn.disabled = false;
                         deleteConfirmBtn.innerText = "Delete Account";
@@ -485,14 +483,16 @@
                     upBtn.addEventListener("click", function(e) {
                         e.stopPropagation();
                         const prevElement = card.previousElementSibling;
-                        listContainer.insertBefore(card, prevElement);
-                        commitNewOrder();
+                        if (prevElement && prevElement.classList.contains("account-card")) {
+                            listContainer.insertBefore(card, prevElement);
+                            commitNewOrder();
+                        }
                     });
 
                     downBtn.addEventListener("click", function(e) {
                         e.stopPropagation();
                         const nextElement = card.nextElementSibling;
-                        if (nextElement) {
+                        if (nextElement && nextElement.classList.contains("account-card")) {
                             listContainer.insertBefore(nextElement, card);
                             commitNewOrder();
                         }
@@ -500,16 +500,18 @@
                 }
             });
 
+            let orderSaveChain = Promise.resolve();
             function commitNewOrder() {
-                const updatedCards = document.querySelectorAll(".account-card");
+                const updatedCards = listContainer.querySelectorAll(":scope > .account-card");
                 const orderArray = [];
                 updatedCards.forEach(function(c) {
-                    orderArray.push(c.getAttribute("data-index"));
+                    orderArray.push(c.getAttribute("data-address"));
                 });
-                
-                pywebview.api.save_account_order(orderArray)
+
+                orderSaveChain = orderSaveChain
+                    .then(function() { return pywebview.api.save_account_order(orderArray); })
                     .catch(function(err) {
-                        console.error("Failed saving position maps indices data: ", err);
+                        console.error("Failed saving account order: ", err);
                     });
             }
         });

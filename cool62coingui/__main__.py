@@ -84,6 +84,22 @@ def _accounts_context():
         accounts.append(account[2])
     return accounts, addresses
 
+
+def _account_index_by_address(address):
+    try:
+        target = core.canonical_address(address)
+    except Exception:
+        return None
+    for i, account in enumerate(config.get("accounts", [])):
+        try:
+            pub_key = serialization.load_pem_public_key(account[1].encode("utf-8"))
+            derived = core.address_from_public_key(pub_key, core.ADDRESS_SCHEME_HEX)
+            if core.canonical_address(derived) == target:
+                return i, account
+        except Exception:
+            continue
+    return None
+
 def _kill_process_by_port(port):
     for proc in psutil.process_iter(['pid', 'name']):
         try:
@@ -222,12 +238,13 @@ class Api:
             raise Exception(str(e))
 
 
-    def rename_account(self, index, new_name):
+    def rename_account(self, address, new_name):
         try:
-            idx = int(index)
-            if idx < 0 or idx >= len(config["accounts"]):
-                raise Exception("Target account index out of bounds.")
-            
+            match = _account_index_by_address(address)
+            if not match:
+                raise Exception("Target account not found.")
+            idx, _ = match
+
             config["accounts"][idx][2] = new_name or "Unnamed Account"
 
             with open(str(CONFIG_DIR), "w") as f:
@@ -237,17 +254,17 @@ class Api:
             sys.stderr.write(f"Account rename failed: {e}\n")
             raise Exception(str(e))
 
-    def delete_account(self, index):
+    def delete_account(self, address):
         try:
-            idx = int(index)
-            if idx < 0 or idx >= len(config["accounts"]):
-                raise Exception("Target account index out of bounds.")
+            match = _account_index_by_address(address)
+            if not match:
+                raise Exception("Target account not found.")
+            idx, target_account = match
 
-            target_account = config["accounts"][idx]
             pub_key = serialization.load_pem_public_key(target_account[1].encode("utf-8"))
-            address = core.address_from_public_key(pub_key, core.ADDRESS_SCHEME_HEX)
+            canonical_hex = core.address_from_public_key(pub_key, core.ADDRESS_SCHEME_HEX)
 
-            node_data = _node(config["node"], f"/balance?address={address}")
+            node_data = _node(config["node"], f"/balance?address={canonical_hex}")
             current_balance = float(node_data["balance"])
 
             if current_balance > 0:
@@ -264,9 +281,24 @@ class Api:
 
     def save_account_order(self, order_list):
         try:
+            accounts = config.get("accounts", [])
+            by_addr = {}
+            for acc in accounts:
+                pub_key = serialization.load_pem_public_key(acc[1].encode("utf-8"))
+                addr = core.canonical_address(core.address_from_public_key(pub_key, core.ADDRESS_SCHEME_HEX))
+                by_addr[addr] = acc
+
+            canonical_order = [core.canonical_address(a) for a in order_list]
+            if len(canonical_order) != len(accounts):
+                raise Exception("Account order list length mismatch.")
+            if len(set(canonical_order)) != len(canonical_order):
+                raise Exception("Duplicate accounts in order list.")
+
             reordered_accounts = []
-            for position in order_list:
-                reordered_accounts.append(config["accounts"][int(position)])
+            for addr in canonical_order:
+                if addr not in by_addr:
+                    raise Exception("Unknown account in order list.")
+                reordered_accounts.append(by_addr[addr])
 
             config["accounts"] = reordered_accounts
 
@@ -274,7 +306,7 @@ class Api:
                 json.dump(config, f, indent=4)
             return True
         except Exception as e:
-            sys.stderr.write(f"Failed saving restructured ordering index data: {e}\n")
+            sys.stderr.write(f"Failed saving account order: {e}\n")
             raise Exception(str(e))
     
     def balance(self, address):
