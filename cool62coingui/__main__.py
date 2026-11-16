@@ -21,6 +21,37 @@ import psutil
 
 from . import core
 
+
+def _patch_pywebview_qt_feature_permission():
+    """Work around a pywebview/PyQt6 incompatibility where feature permission
+    policies are passed as ints instead of QWebEnginePage.PermissionPolicy enums."""
+    try:
+        from webview.platforms import qt as qt_platform
+    except Exception:
+        return
+
+    browser_view = getattr(qt_platform, "BrowserView", None)
+    web_page_cls = getattr(browser_view, "WebPage", None) if browser_view else None
+    qweb_page = getattr(qt_platform, "QWebPage", None)
+    if not web_page_cls or not qweb_page:
+        return
+
+    def _on_feature_permission_requested(self, url, feature):
+        policy_enum = getattr(qweb_page, "PermissionPolicy", None)
+        if policy_enum is not None:
+            granted = getattr(policy_enum, "PermissionGrantedByUser", 1)
+            denied = getattr(policy_enum, "PermissionDeniedByUser", 2)
+        else:
+            granted = getattr(qweb_page, "PermissionGrantedByUser", 1)
+            denied = getattr(qweb_page, "PermissionDeniedByUser", 2)
+
+        # Grant requested features (clipboard, notifications, etc.) to avoid
+        # breaking app functionality like Copy buttons. This is a local app UI.
+        self.setFeaturePermission(url, feature, granted)
+
+    if getattr(qt_platform, "is_webengine", False):
+        web_page_cls.onFeaturePermissionRequested = _on_feature_permission_requested
+
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 TEMPLATES_DIR = BASE_DIR / "templates"
@@ -648,6 +679,8 @@ m7riwrjpt4jw5uqjsf2tb36fvilous6f43enthnjh2w4dnq3wb2xcjqd.onion""")
 
     api = Api()
     
+    _patch_pywebview_qt_feature_permission()
+
     active_window = webview.create_window(
         "cool62coin Wallet", 
         text_select=True, 
