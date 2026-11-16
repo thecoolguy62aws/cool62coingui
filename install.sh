@@ -31,6 +31,7 @@ _cool62coin_install() {
     echo ""
 
     echo "[2/3] Installing dependencies..."
+    apt update && sudo apt install -y libxcb-cursor0
     python -m pip install --upgrade pip || return 1
     pip install . || return 1
 
