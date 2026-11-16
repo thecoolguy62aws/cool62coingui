@@ -225,4 +225,5 @@ wallet.json
 *.pem
 peers.txt
 tor.exe
+tor
 data/
