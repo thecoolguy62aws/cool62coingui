@@ -16,9 +16,11 @@ The cool62coin Wallet is much more user friendly and feature rich than the light
 2. Run `install.bat`.
 3. Search for `cool62coin Wallet` in your operating system search menu. You will find it, and from there you can pin it to your taskbar, start menu, or make a desktop shortcut.
 
-### Linux, Darwin, and other Unix-like kernals
+### Linux
 
-Unfortunately, I haven't implemented install scripts for these operating systems yet, but I will very soon.
+1. Clone the repo onto your machine. The directory you put it in will be the installation directory.
+2. Run `source install.sh`.
+3. Search for `cool62coin Wallet` in your operating system search menu.
 
 ## Usage
 
