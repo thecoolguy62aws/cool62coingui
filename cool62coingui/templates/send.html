@@ -57,8 +57,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
             <div class="form-group" style="margin-top: 1.5rem;">
                 <label for="amount" class="form-label">Amount (C62):</label>
-                <input type="number" id="amount" class="address-textbox" step="any" min="0" placeholder="0.00" required>
-                <span style="font-size: 0.85rem; color: #6b7280; margin-top: 0.25rem;">+ 1 C62 network transaction fee will be applied</span>
+                <input type="number" id="amount" class="address-textbox" step="0.00000001" min="0" placeholder="0.00000000" required>
+                <span id="send-fee-hint" style="font-size: 0.85rem; color: #6b7280; margin-top: 0.25rem;">+ 1 C62 network transaction fee will be applied</span>
             </div>
 
             <div class="form-group" style="margin-top: 1.5rem;">
@@ -81,7 +81,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
             
             <div class="modal-tx-summary">
                 <p><strong>Amount to Send:</strong> <span id="modal-summary-amount">0</span> C62</p>
-                <p><strong>Network Fee:</strong> 1 C62</p>
+                <p><strong>Network Fee:</strong> <span id="modal-fee">1 C62</span></p>
                 <p style="border-top: 1px solid #e5e7eb; margin-top: 0.5rem; padding-top: 0.5rem;"><strong>Total Deducted:</strong> <span id="modal-summary-total">0</span> C62</p>
                 <p><strong>Memo:</strong> <span id="modal-summary-memo" style="font-style: italic; color: #4b5563;">None</span></p>
                 <p style="margin-top: 0.5rem;"><strong>Recipient:</strong> <span id="modal-summary-recipient" style="font-family: monospace; word-break: break-all;">-</span></p>
@@ -103,6 +103,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
         let totalBalance = 0;
         let completedRequests = 0;
         let isAddressValid = false; 
+        let feeCoins = 1;
+        let coinDecimals = 8;
+
+        function formatCoins(value) {
+            if (!isFinite(value)) return "0";
+            return Number(value).toFixed(coinDecimals).replace(/\.?0+$/, "") || "0";
+        }
 
         window.addEventListener('pywebviewready', function() {
             const cards = document.querySelectorAll('.account-card');
@@ -118,6 +125,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
             const modalConfirmBtn = document.getElementById('modal-confirm-btn');
             const summaryAmount = document.getElementById('modal-summary-amount');
             const summaryRecipient = document.getElementById('modal-summary-recipient');
+            const modalFee = document.getElementById('modal-fee');
+            const feeHint = document.getElementById('send-fee-hint');
+            const amountInput = document.getElementById('amount');
+
+            pywebview.api.get_fork_info().then(info => {
+                feeCoins = Number(info.fee);
+                coinDecimals = Number(info.coin_decimals) || 8;
+                amountInput.step = '0.' + '0'.repeat(Math.max(0, coinDecimals - 1)) + '1';
+                feeHint.innerText = '+ ' + info.fee + ' C62 network transaction fee will be applied';
+                modalFee.innerText = info.fee + ' C62';
+            }).catch(() => {});
 
             function updateButtonState() {
                 const hasSender = fromAddressInput.value !== '';
@@ -206,8 +224,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
                 const inputAmount = Number(document.getElementById('amount').value);
                 const memoValue = document.getElementById('memo').value.trim();
 
-                summaryAmount.innerText = inputAmount;
-                document.getElementById('modal-summary-total').innerText = (inputAmount + 1).toFixed(6);
+                summaryAmount.innerText = formatCoins(inputAmount);
+                document.getElementById('modal-summary-total').innerText = formatCoins(inputAmount + feeCoins);
                 summaryRecipient.innerText = toAddress;
                 document.getElementById('modal-summary-memo').innerText = memoValue ? memoValue : "None";
 

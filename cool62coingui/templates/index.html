@@ -192,6 +192,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
     <script>
         let totalBalance = 0;
+
+        function formatTotal(value) {
+            if (!isFinite(value)) return "0";
+            return (Math.round(value * 1e8) / 1e8).toString();
+        }
         let completedRequests = 0;
         const balances = {};
         let activeDeleteAddress = null;
@@ -455,7 +460,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
                     .finally(function() {
                         completedRequests++;
                         if (completedRequests === cards.length) {
-                            document.getElementById("total-balance").innerHTML = '<span>Total Balance: </span>' + totalBalance + " C62";
+                            document.getElementById("total-balance").innerHTML = '<span>Total Balance: </span>' + formatTotal(totalBalance) + " C62";
                         }
                     });
 

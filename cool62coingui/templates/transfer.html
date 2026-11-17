@@ -67,8 +67,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
             <div class="form-group" style="margin-top: 2rem; max-width: 500px;">
                 <label for="amount" class="form-label">Amount to Transfer (C62):</label>
-                <input type="number" id="amount" class="address-textbox" step="any" min="0" placeholder="0.00" required>
-                <span style="font-size: 0.85rem; color: #6b7280; margin-top: 0.25rem;">+ 1 C62 network transaction fee applies</span>
+                <input type="number" id="amount" class="address-textbox" step="0.00000001" min="0" placeholder="0.00000000" required>
+                <span id="transfer-fee-hint" style="font-size: 0.85rem; color: #6b7280; margin-top: 0.25rem;">+ 1 C62 network transaction fee applies</span>
             </div>
 
             <p id="tx-status" class="status-msg" style="max-width: 500px;"></p>
@@ -86,7 +86,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
             
             <div class="modal-tx-summary">
                 <p><strong>Principal Amount:</strong> <span id="modal-summary-amount">0</span> C62</p>
-                <p><strong>Network Fee:</strong> 1 C62</p>
+                <p><strong>Network Fee:</strong> <span id="modal-fee">1 C62</span></p>
                 <p style="border-top: 1px solid #e5e7eb; margin-top: 0.5rem; padding-top: 0.5rem;"><strong>Total Deducted:</strong> <span id="modal-summary-total">0</span> C62</p>
             </div>
 
@@ -105,6 +105,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     <script>
         let fromAddress = '';
         let toAddress = '';
+        let feeCoins = 1;
+        let coinDecimals = 8;
+
+        function formatCoins(value) {
+            if (!isFinite(value)) return "0";
+            return Number(value).toFixed(coinDecimals).replace(/\.?0+$/, "") || "0";
+        }
 
         window.addEventListener('pywebviewready', function() {
             const fromCards = document.querySelectorAll('.from-card');
@@ -117,6 +124,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
             const modalCheck = document.getElementById('modal-irreversible-check');
             const modalCancelBtn = document.getElementById('modal-cancel-btn');
             const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+            const amountInput = document.getElementById('amount');
+
+            pywebview.api.get_fork_info().then(info => {
+                feeCoins = Number(info.fee);
+                coinDecimals = Number(info.coin_decimals) || 8;
+                amountInput.step = '0.' + '0'.repeat(Math.max(0, coinDecimals - 1)) + '1';
+                document.getElementById('transfer-fee-hint').innerText = '+ ' + info.fee + ' C62 network transaction fee applies';
+                document.getElementById('modal-fee').innerText = info.fee + ' C62';
+            }).catch(() => {});
 
             function updateUIStates() {
                 fromCards.forEach(card => {
@@ -197,8 +213,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
                 if (!fromAddress || !toAddress) return;
 
                 const amt = Number(document.getElementById('amount').value);
-                document.getElementById('modal-summary-amount').innerText = amt;
-                document.getElementById('modal-summary-total').innerText = (amt + 1).toFixed(6);
+                document.getElementById('modal-summary-amount').innerText = formatCoins(amt);
+                document.getElementById('modal-summary-total').innerText = formatCoins(amt + feeCoins);
 
                 modalCheck.checked = false;
                 modalConfirmBtn.disabled = true;

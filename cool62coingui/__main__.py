@@ -80,25 +80,57 @@ def _node(base, path, method="GET", body=None):
     return resp.json()
 
 
-_height_cache = {"at": 0.0, "height": None}
+_info_cache = {"at": 0.0, "info": None}
 
 
-def _node_height():
+def _node_info():
     now = time.time()
-    if now - _height_cache["at"] < 5:
-        return _height_cache["height"]
-    height = None
+    if now - _info_cache["at"] < 5:
+        return _info_cache["info"]
+    info = None
     try:
         base = config.get("node", "https://coinnode.cool62.net").rstrip("/")
         resp = requests.get(base + "/info", timeout=3)
         if resp.ok:
-            raw = resp.json().get("height")
-            height = int(raw) if raw is not None else None
+            info = resp.json()
     except Exception:
-        height = None
-    _height_cache["at"] = now
-    _height_cache["height"] = height
-    return height
+        info = None
+    _info_cache["at"] = now
+    _info_cache["info"] = info
+    return info
+
+
+def _node_height():
+    info = _node_info() or {}
+    raw = info.get("height")
+    try:
+        return int(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _balance_atoms(node_data):
+    atoms = node_data.get("balance_atoms")
+    if atoms is not None:
+        return int(atoms)
+    return core.coins_to_atoms(node_data["balance"])
+
+
+def _format_atoms(atoms):
+    try:
+        return core.format_atoms(int(atoms))
+    except (TypeError, ValueError):
+        return str(atoms)
+
+
+def _history_amount(tx):
+    amount = tx.get("amount")
+    if tx.get("version") == core.TX_VERSION_ATOMS:
+        return _format_atoms(amount)
+    try:
+        return _format_atoms(core.coins_to_atoms(amount))
+    except (TypeError, ValueError):
+        return str(amount)
 
 
 def _canonical(address):
@@ -299,10 +331,10 @@ class Api:
             canonical_hex = core.address_from_public_key(pub_key, core.ADDRESS_SCHEME_HEX)
 
             node_data = _node(config["node"], f"/balance?address={canonical_hex}")
-            current_balance = float(node_data["balance"])
+            current_atoms = _balance_atoms(node_data)
 
-            if current_balance > 0:
-                raise Exception(f"Cannot delete account. Contains a remaining balance of {current_balance} C62.")
+            if current_atoms > 0:
+                raise Exception(f"Cannot delete account. Contains a remaining balance of {_format_atoms(current_atoms)} C62.")
 
             config["accounts"].pop(idx)
 
@@ -347,26 +379,53 @@ class Api:
         try:
             address = core.canonical_address(address)
             node_data = _node(config["node"], f"/balance?address={address}")
-            raw_balance = node_data["balance"]
-            
-            if isinstance(raw_balance, float) and raw_balance.is_integer():
-                return int(raw_balance)
-            return raw_balance
+            return _format_atoms(_balance_atoms(node_data))
         except Exception as e:
             sys.stderr.write(f"Error fetching balance for {address}: {e}\n")
             return "Error"
 
+    def get_fork_info(self):
+        info = _node_info() or {}
+        height = _node_height()
+        activation = int(info.get("atomic_activation", core.ATOMIC_ACTIVATION))
+        tx_version = info.get("tx_version")
+        if tx_version is None:
+            tx_version = (core.TX_VERSION_ATOMS if height is not None
+                          and height >= activation else core.TX_VERSION_LEGACY)
+        fee_atoms = info.get("transaction_fee_atoms")
+        if fee_atoms is None:
+            fee_atoms = core.transaction_fee_atoms(height)
+        reward_atoms = info.get("reward_atoms")
+        if reward_atoms is None:
+            reward_atoms = core.coins_to_atoms(info.get("reward", 100))
+        return {
+            "height": height,
+            "atomic_activation": activation,
+            "tx_version": int(tx_version),
+            "coin_decimals": int(info.get("coin_decimals", core.COIN_DECIMALS)),
+            "fee_atoms": int(fee_atoms),
+            "fee": _format_atoms(fee_atoms),
+            "reward_atoms": int(reward_atoms),
+            "reward": _format_atoms(reward_atoms),
+        }
+
     def send_transaction(self, from_address, to_address, amount, memo=None):
         try:
-            try:
-                amt_float = float(amount)
-            except ValueError:
-                raise Exception(f"Invalid amount format: '{amount}'")
-                
-            if amt_float < 0:
-                raise Exception("Transaction amount must be non-negative")
-
+            info = _node_info() or {}
             height = _node_height()
+            activation = int(info.get("atomic_activation", core.ATOMIC_ACTIVATION))
+            tx_version = info.get("tx_version")
+            if tx_version is None:
+                tx_version = (core.TX_VERSION_ATOMS if height is not None
+                              and height >= activation else core.TX_VERSION_LEGACY)
+            tx_version = int(tx_version)
+
+            try:
+                amount_atoms = core.parse_amount_to_atoms(amount)
+            except ValueError as e:
+                raise Exception(f"Invalid amount: {e}")
+            amount_value = (amount_atoms if tx_version == core.TX_VERSION_ATOMS
+                            else float(core.atoms_to_coins(amount_atoms)))
 
             if not core.is_valid_address(from_address, height):
                 raise Exception("Sender address is not a valid cool62coin address structure.")
@@ -383,9 +442,17 @@ class Api:
             canonical_from = core.canonical_address(from_address)
 
             node_data = _node(config["node"], f"/balance?address={canonical_from}")
-            current_balance = float(node_data["balance"])
-            if current_balance < (amt_float + 1.0):
-                raise Exception(f"Insufficient funds. You need at least {amt_float + 1.0} C62 (includes 1 C62 network fee) but only have {current_balance} C62.")
+            current_atoms = _balance_atoms(node_data)
+            fee_atoms = info.get("transaction_fee_atoms")
+            if fee_atoms is None:
+                fee_atoms = core.transaction_fee_atoms(height)
+            fee_atoms = int(fee_atoms)
+            required_atoms = amount_atoms + fee_atoms
+            if current_atoms < required_atoms:
+                raise Exception(
+                    f"Insufficient funds. You need at least {_format_atoms(required_atoms)} C62 "
+                    f"(includes {_format_atoms(fee_atoms)} C62 network fee) but only have "
+                    f"{_format_atoms(current_atoms)} C62.")
 
             target_account = None
             sender_address = None
@@ -409,15 +476,19 @@ class Api:
             memo_str = memo.strip() if memo and memo.strip() else None
 
             nonce = int(time.time())
-            signature = core.sign_transaction(private_key, sender_address, to_address, amt_float, nonce, memo_str)
+            signature = core.sign_transaction(
+                private_key, sender_address, to_address, amount_value, nonce,
+                memo_str, version=tx_version)
 
             tx_payload = {
                 "sender": sender_address,
                 "receiver": to_address,
-                "amount": amt_float,
+                "amount": amount_value,
                 "nonce": nonce,
                 "signature": signature
             }
+            if tx_version == core.TX_VERSION_ATOMS:
+                tx_payload["version"] = tx_version
             
             if memo_str:
                 tx_payload["memo"] = memo_str
@@ -440,13 +511,23 @@ class Api:
             tx_history = []
             seen_transactions = set()
             target = _canonical(address)
+            info = _node_info() or {}
+            activation = int(info.get("atomic_activation", core.ATOMIC_ACTIVATION))
+            reward_atoms = info.get("reward_atoms")
+            if reward_atoms is None:
+                reward_atoms = core.coins_to_atoms(info.get("reward", 100))
+            reward_atoms = int(reward_atoms)
+            legacy_reward_atoms = core.coins_to_atoms(100)
+            blocks = []
 
             try:
                 pool_data = _node(config["node"], "/txpool")
                 pool_txs = pool_data.get("transactions", pool_data.get("txpool", []))
                 for tx in pool_txs:
                     if _canonical(tx.get("sender")) == target or _canonical(tx.get("receiver")) == target:
-                        tx_key = (_canonical(tx.get("sender")), _canonical(tx.get("receiver")), tx.get("nonce"), float(tx.get("amount", 0)))
+                        tx_key = (_canonical(tx.get("sender")), _canonical(tx.get("receiver")),
+                                  tx.get("nonce"), tx.get("version", core.TX_VERSION_LEGACY),
+                                  tx.get("amount"))
                         
                         if tx_key not in seen_transactions:
                             seen_transactions.add(tx_key)
@@ -459,7 +540,7 @@ class Api:
                             tx_history.append({
                                 "sender": sender,
                                 "receiver": receiver,
-                                "amount": tx.get("amount"),
+                                "amount": _history_amount(tx),
                                 "nonce": tx.get("nonce"),
                                 "memo": tx.get("memo", ""),
                                 "signature": tx.get("signature"),
@@ -481,7 +562,9 @@ class Api:
                         
                     for tx in block.get("transactions", []):
                         if _canonical(tx.get("sender")) == target or _canonical(tx.get("receiver")) == target:
-                            tx_key = (_canonical(tx.get("sender")), _canonical(tx.get("receiver")), tx.get("nonce"), float(tx.get("amount", 0)))
+                            tx_key = (_canonical(tx.get("sender")), _canonical(tx.get("receiver")),
+                                      tx.get("nonce"), tx.get("version", core.TX_VERSION_LEGACY),
+                                      tx.get("amount"))
                             
                             if tx_key in seen_transactions:
                                 for existing_tx in tx_history:
@@ -502,7 +585,7 @@ class Api:
                             tx_history.append({
                                 "sender": sender,
                                 "receiver": receiver,
-                                "amount": tx.get("amount"),
+                                "amount": _history_amount(tx),
                                 "nonce": tx.get("nonce"),
                                 "memo": tx.get("memo", ""),
                                 "signature": tx.get("signature"),
@@ -520,10 +603,14 @@ class Api:
                         block_height = "?"
                     
                     if _canonical(block.get("miner")) == target:
+                        if isinstance(block_height, int) and block_height < activation:
+                            mined_atoms = legacy_reward_atoms
+                        else:
+                            mined_atoms = reward_atoms
                         tx_history.append({
                             "sender": "Mined",
                             "receiver": address,
-                            "amount": 100,
+                            "amount": _format_atoms(mined_atoms),
                             "nonce": block.get("timestamp"),
                             "memo": "",
                             "signature": "N/A",
@@ -607,6 +694,8 @@ class Api:
                 target_url = custom_url.strip()
 
             config["node"] = target_url
+            _info_cache["at"] = 0.0
+            _info_cache["info"] = None
             with open(str(CONFIG_DIR), "w") as f:
                 json.dump(config, f, indent=4)
                 

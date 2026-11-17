@@ -35,4 +35,8 @@ cool62coin supports two encodings for the same Ed25519 account:
 
 Both encodings share the same balance, and accounts do not need to be migrated. Bech32 addresses become valid on the network at block 1500. Until the connected node reports that height, the wallet shows the legacy hex form so your addresses remain usable; after activation it displays Bech32 by default.
 
+## Block 8000 hard fork
+
+At block 8000 the network moves to integer atom amounts with 8 decimal places (`1 C62 = 100,000,000 atoms`). The wallet reads the fork state from the connected node's `/info` endpoint and automatically signs version 1 transactions before activation and version 2 transactions after it. Balances and history amounts are displayed with up to 8 decimal places. The wallet cannot send a legacy transaction after activation, so make sure it is connected to an upgraded node once the network reaches block 8000.
+
 **Highly Recommended**: For increased privacy, you should go to the `Node` page and switch it to `Background Local Node`. When you close the app, the node will automatically stop, and when you open it, it will automatically start again. Note that while the node is syncing with the network your balances may appear incorrect for a while (about 5 minutes). Make sure to periodically hit `Reload` to check if your balances are updated!
